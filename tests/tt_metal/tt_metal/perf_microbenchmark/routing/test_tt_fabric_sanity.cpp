@@ -96,6 +96,17 @@ typedef struct test_board {
             _init_galaxy_board(32);
         } else if ("ubb" == board_type_) {
             _init_galaxy_board(32, true);
+        } else if ("p150a" == board_type_) {
+            mesh_graph_descriptor = "dual_p150a_mesh_graph_descriptor.yaml";
+            num_chips_to_use = 2;
+
+            if (num_chips_to_use != tt_metal::GetNumAvailableDevices()) {
+                throw std::runtime_error("Not found the expected 2 chips for p150a");
+            }
+
+            for (auto i = 0; i < num_chips_to_use; i++) {
+                available_chip_ids.push_back(i);
+            }
         } else {
             throw std::runtime_error("Unsupported board");
         }
@@ -510,7 +521,7 @@ typedef struct test_device {
         std::vector<CoreCoord> result;
 
         // shuffle the list of cores
-        std::shuffle(worker_cores.begin(), worker_cores.end(), global_rng);
+        // std::shuffle(worker_cores.begin(), worker_cores.end(), global_rng);
 
         // return and delete the selected cores
         for (auto i = 0; i < count; i++) {
@@ -590,6 +601,7 @@ typedef struct test_traffic {
 
         _get_available_router_cores(num_hops);
         num_links_to_use = std::min(num_links_, (uint32_t)available_router_cores.size());
+        std::cout << "specified  " << num_links_ << " to use but using " << num_links_to_use << std::endl;
 
         _generate_tx_to_rx_mapping();
         _generate_target_addresses();
