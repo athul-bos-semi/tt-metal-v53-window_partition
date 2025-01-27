@@ -73,6 +73,7 @@ inline std::vector<std::pair<std::vector<uint32_t>, std::vector<uint32_t>>> get_
 
     uint32_t output_row_size_bytes_offset = tt::round_up(output_row_size_bytes, ALIGNMENT);
     uint32_t start_addr = input_tensor.buffer()->address();
+
     std::vector<uint32_t> common_reader_kernel_args = {
         start_addr + begins_bytes - misalignment,  // read from nearest aligned address
         input_row_size_bytes,
@@ -148,8 +149,8 @@ inline std::vector<std::pair<std::vector<uint32_t>, std::vector<uint32_t>>> get_
 
 operation::ProgramWithCallbacks slice_rm_multi_core(
     const Tensor& a, Tensor& output, const ttnn::Shape& output_tensor_start, const ttnn::Shape& output_tensor_end) {
-    const ttnn::Shape output_shape = output.get_logical_shape();
 
+    const ttnn::Shape output_shape = output.get_logical_shape();
     tt::tt_metal::Program program = tt::tt_metal::CreateProgram();
 
     // This should allocate a DRAM buffer on the device
@@ -727,8 +728,8 @@ inline __attribute__((always_inline)) void set_slice_runtime_args_tile(
     std::vector<uint32_t>& accumulated_total_per_dim) {
     const auto input_buffer = input_tensor.buffer();
     const auto output_buffer = output_tensor.buffer();
-    const auto& input_shape = input_tensor.get_padded_shape();
-    const auto& output_shape = output_tensor.get_padded_shape();
+    const auto& input_shape = input_tensor.get_logical_shape();
+    const auto& output_shape = output_tensor.get_logical_shape();
 
     std::uint32_t num_dims = static_cast<std::uint32_t>(input_shape.rank());
 

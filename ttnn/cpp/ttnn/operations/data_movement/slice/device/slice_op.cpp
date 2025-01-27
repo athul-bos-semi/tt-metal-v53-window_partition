@@ -80,6 +80,7 @@ void SliceDeviceOperation::validate_with_output_tensors(
 
     auto logical_shape = input_tensor_a.get_logical_shape();
     auto padded_shape = input_tensor_a.get_padded_shape();
+
     TT_FATAL(
         logical_shape.rank() == this->slice_start.rank() && this->slice_start.rank() == this->slice_end.rank(),
         "Error");
