@@ -42,7 +42,7 @@ constexpr uint32_t RISCV_IC_TRISC_ALL_MASK = RISCV_IC_TRISC0_MASK | RISCV_IC_TRI
 
 #define NCRISC_FIRMWARE_IN_IRAM (defined(ARCH_GRAYSKULL))
 
-#ifdef NCRISC_HAS_IRAM
+#if NCRISC_FIRMWARE_IN_IRAM
 constexpr uint32_t num_cbs_to_early_init = 4;  // safe small number to overlap w/ ncrisc copy
 #else
 constexpr uint32_t num_cbs_to_early_init = 0;
@@ -183,7 +183,7 @@ void set_deassert_addresses() {
 }
 
 void l1_to_ncrisc_iram_copy(uint32_t src_addr, uint16_t size, uint32_t address_offset = 0) {
-#ifdef NCRISC_HAS_IRAM
+#if NCRISC_FIRMWARE_IN_IRAM
     // Always copy ncrisc even if its size is 0 (save branch)...
     // Copy NCRISC firmware from L1 to local IRAM using tensix DMA
     tdma_xmov(
@@ -196,7 +196,7 @@ void l1_to_ncrisc_iram_copy(uint32_t src_addr, uint16_t size, uint32_t address_o
 }
 
 void l1_to_ncrisc_iram_copy_wait() {
-#ifdef NCRISC_HAS_IRAM
+#if NCRISC_FIRMWARE_IN_IRAM
     // Wait for DMA to finish
     wait_tdma_movers_done(RISCV_TDMA_STATUS_FLAG_MOVER0_BUSY_MASK);
 #endif
