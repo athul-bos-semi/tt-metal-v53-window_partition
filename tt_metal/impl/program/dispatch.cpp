@@ -784,31 +784,6 @@ void assemble_runtime_args_commands(
     program_command_sequence.runtime_args_fetch_size_bytes = runtime_args_fetch_size_bytes;
 }
 
-template <typename PackedSubCmd>
-void insert_write_packed_payloads(
-    DeviceCommandCalculator& calculator,
-    const uint32_t num_sub_cmds,
-    const uint32_t sub_cmd_sizeB,
-    const uint32_t max_prefetch_command_size,
-    const uint32_t packed_write_max_unicast_sub_cmds,
-    std::vector<std::pair<uint32_t, uint32_t>>& packed_cmd_payloads) {
-    uint32_t l1_alignment = hal.get_alignment(HalMemType::L1);
-    const uint32_t aligned_sub_cmd_sizeB = tt::align(sub_cmd_sizeB, l1_alignment);
-    const uint32_t max_packed_sub_cmds_per_cmd = get_max_write_packed_sub_cmds<PackedSubCmd>(
-        aligned_sub_cmd_sizeB, max_prefetch_command_size, packed_write_max_unicast_sub_cmds, false);
-    uint32_t rem_num_sub_cmds = num_sub_cmds;
-    while (rem_num_sub_cmds != 0) {
-        const uint32_t num_sub_cmds_in_cmd = std::min(max_packed_sub_cmds_per_cmd, rem_num_sub_cmds);
-        const uint32_t aligned_data_sizeB = aligned_sub_cmd_sizeB * num_sub_cmds_in_cmd;
-        const uint32_t dispatch_cmd_sizeB =
-            tt::align(sizeof(CQDispatchCmd) + num_sub_cmds_in_cmd * sizeof(PackedSubCmd), l1_alignment);
-        packed_cmd_payloads.emplace_back(num_sub_cmds_in_cmd, dispatch_cmd_sizeB + aligned_data_sizeB);
-        rem_num_sub_cmds -= num_sub_cmds_in_cmd;
-        calculator.add_dispatch_write_packed<PackedSubCmd>(
-            num_sub_cmds_in_cmd, sub_cmd_sizeB, packed_write_max_unicast_sub_cmds);
-    }
-}
-
 void assemble_device_commands(
     ProgramCommandSequence& program_command_sequence, Program& program, IDevice* device, SubDeviceId sub_device_id) {
     DeviceCommandCalculator calculator;
@@ -885,8 +860,7 @@ void assemble_device_commands(
                         transfer_info.data.data(), transfer_info.data.size() * sizeof(uint32_t));
                 }
             }
-            insert_write_packed_payloads<CQDispatchWritePackedUnicastSubCmd>(
-                calculator,
+            calculator.insert_write_packed_payloads<CQDispatchWritePackedUnicastSubCmd>(
                 unicast_sem_sub_cmds[i].size(),
                 unicast_sem_dst_size.back().second,
                 max_prefetch_command_size,
@@ -1191,8 +1165,7 @@ void assemble_device_commands(
         }
     }
     if (multicast_go_signal_sub_cmds.size() > 0) {
-        insert_write_packed_payloads<CQDispatchWritePackedMulticastSubCmd>(
-            calculator,
+        calculator.insert_write_packed_payloads<CQDispatchWritePackedMulticastSubCmd>(
             multicast_go_signal_sub_cmds.size(),
             go_signal_sizeB,
             max_prefetch_command_size,
@@ -1228,8 +1201,7 @@ void assemble_device_commands(
     }
 
     if (unicast_go_signal_sub_cmds.size() > 0) {
-        insert_write_packed_payloads<CQDispatchWritePackedUnicastSubCmd>(
-            calculator,
+        calculator.insert_write_packed_payloads<CQDispatchWritePackedUnicastSubCmd>(
             unicast_go_signal_sub_cmds.size(),
             go_signal_sizeB,
             max_prefetch_command_size,
