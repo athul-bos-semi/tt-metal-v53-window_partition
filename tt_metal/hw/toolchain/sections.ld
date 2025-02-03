@@ -54,13 +54,6 @@ PHDRS {
 
 SECTIONS
 {
-#if defined(TYPE_KERNEL) && defined(TARGET_AERISC)
-  .fabric_router_data :
-  {
-    KEEP(*(.fabric_router_data))
-  } > FABRIC_ROUTER_DATA_MEM :fabric_router_data
-#endif
-
   .text TEXT_START : ALIGN(4)
   {
     /* Because TEXT_START might not be the start of a region, we
@@ -157,6 +150,13 @@ SECTIONS
     . = ALIGN(4);
     __ldm_bss_end = .;
   } > REGION_DATA :data
+
+#if defined(TYPE_KERNEL) && defined(TARGET_AERISC)
+  .fabric_router_data :
+  {
+    KEEP(*(.fabric_router_data))
+  } > FABRIC_ROUTER_DATA_MEM :fabric_router_data
+#endif
 
 #ifdef TYPE_FIRMWARE
   . = ALIGN(ABSOLUTE(.), MEM_ALIGN);

@@ -521,6 +521,7 @@ typedef struct test_device {
 
     void terminate_gatekeeper_kernel() {
         std::vector<uint32_t> zero_buf(12, 0);
+        std::cout << "Gatekeeper phys core is " << gk_phys_core.str() << std::endl;
         tt::llrt::write_hex_vec_to_core(device_handle->id(), gk_phys_core, zero_buf, gk_interface_addr);
     }
 

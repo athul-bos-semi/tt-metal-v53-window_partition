@@ -47,11 +47,14 @@ uint32_t gk_message_pending;
 
 inline void notify_all_routers(uint32_t notification) {
     uint32_t remaining_cores = router_mask;
+    DPRINT << "router mask is " << HEX() << router_mask << DEC() << ENDL();
     for (uint32_t i = 0; i < 16; i++) {
         if (remaining_cores == 0) {
             break;
         }
         if (remaining_cores & (0x1 << i)) {
+            DPRINT << "eth_chan_to_noc_xy " << HEX() << eth_chan_to_noc_xy[noc_index][i] << " i " << i << " noci "
+                   << noc_index << DEC() << ENDL();
             uint64_t dest_addr = get_noc_addr_helper(eth_chan_to_noc_xy[noc_index][i], FABRIC_ROUTER_SYNC_SEM);
             noc_inline_dw_write(dest_addr, notification);
             remaining_cores &= ~(0x1 << i);
@@ -467,8 +470,8 @@ void kernel_main() {
     WAYPOINT("GAT0");
 
     while (1) {
+        invalidate_l1_cache();
         if (!gk_msg_buf_is_empty(msg_buf) && gk_msg_valid(msg_buf)) {
-            invalidate_l1_cache();
             uint32_t msg_index = msg_buf->rdptr.ptr & FVCC_SIZE_MASK;
             chan_request_entry_t* req = (chan_request_entry_t*)msg_buf->msg_buf + msg_index;
             packet_header_t* packet = &req->packet_header;
