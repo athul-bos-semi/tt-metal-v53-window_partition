@@ -22,6 +22,8 @@
 #include <tt-metalium/hal.hpp>
 #include "llrt.hpp"
 
+#include "tt_metal/impl/dispatch/topology.hpp"
+
 #define CQ_PREFETCH_CMD_BARE_MIN_SIZE tt::tt_metal::hal.get_alignment(tt::tt_metal::HalMemType::HOST)
 
 constexpr uint32_t DEFAULT_TEST_TYPE = 0;
@@ -54,7 +56,7 @@ constexpr uint32_t DRAM_DATA_BASE_ADDR = 1024 * 1024;
 
 constexpr uint32_t PCIE_TRANSFER_SIZE_DEFAULT = 4096;
 
-constexpr uint32_t host_data_dirty_pattern = 0xbaadf00d;
+constexpr uint32_t host_data_dirty_pattern = 0xDEADBEEF;
 
 constexpr CoreType DISPATCH_CORE_TYPE = CoreType::WORKER;
 
@@ -114,6 +116,13 @@ uint32_t max_xfer_size_bytes_g = dispatch_buffer_page_size_g;
 uint32_t min_xfer_size_bytes_g = 4;
 uint32_t l1_buf_base_g;
 uint32_t test_device_id_g = 0;
+
+static constexpr uint32_t x = -1;
+
+static const std::vector<DispatchKernelNode> single_chip = {
+    {0, 0, 0, 0, PREFETCH_HD, {x, x, x, x}, {1, x, x, x}, NOC::NOC_0, NOC::NOC_0, NOC::NOC_0},
+    {1, 0, 0, 0, DISPATCH_HD, {0, x, x, x}, {x, x, x, x}, NOC::NOC_0, NOC::NOC_1, NOC::NOC_0},
+};
 
 void init(int argc, char** argv) {
     auto default_settings = DispatchSettings::defaults(DISPATCH_CORE_TYPE, tt::Cluster::instance(), 1);
@@ -1683,14 +1692,14 @@ std::chrono::duration<double> run_test(
 void configure_for_single_chip(
     IDevice* device,
     Program& program,
-    void*& host_hugepage_base,
+    void* host_hugepage_base,
     uint32_t prefetch_q_base,
     uint32_t prefetch_q_rd_ptr_addr,
-    CoreCoord& phys_prefetch_relay_mux_core,
-    CoreCoord& phys_prefetch_relay_demux_core,
-    CoreCoord& phys_dispatch_relay_mux_core,
-    CoreCoord& phys_dispatch_relay_demux_core,
-    uint32_t& packetized_path_test_results_addr,
+    const CoreCoord& prefetch_relay_mux_core,
+    const CoreCoord& prefetch_relay_demux_core,
+    const CoreCoord& dispatch_relay_mux_core,
+    const CoreCoord& dispatch_relay_demux_core,
+    uint32_t packetized_path_test_results_addr,
     uint32_t packetized_path_test_results_size,
     uint32_t dev_hugepage_base_g) {
     uint32_t dispatch_buffer_pages = DispatchMemMap::get(DISPATCH_CORE_TYPE, 1).dispatch_buffer_block_size_pages() *
@@ -1698,48 +1707,32 @@ void configure_for_single_chip(
     uint32_t num_compute_cores =
         device->compute_with_storage_grid_size().x * device->compute_with_storage_grid_size().y;
 
-    CoreCoord prefetch_core = {0, 0};
-    CoreCoord prefetch_d_core = {3, 0};
-    CoreCoord dispatch_core = {4, 0};
-    CoreCoord dispatch_h_core = {7, 0};
+    uint16_t channel = tt::Cluster::instance().get_assigned_channel_for_device(device->id());
+    auto prefetch_core = dispatch_core_manager::instance().prefetcher_core(device->id(), channel, 0);
+    auto prefetch_d_core = dispatch_core_manager::instance().prefetcher_d_core(device->id(), channel, 0);
+    auto dispatch_core = dispatch_core_manager::instance().dispatcher_d_core(device->id(), channel, 0);
+    auto dispatch_h_core = dispatch_core_manager::instance().dispatcher_core(device->id(), channel, 0);
 
     phys_prefetch_core_g = device->worker_core_from_logical_core(prefetch_core);
     CoreCoord phys_prefetch_d_core = device->worker_core_from_logical_core(prefetch_d_core);
     CoreCoord phys_dispatch_core = device->worker_core_from_logical_core(dispatch_core);
     CoreCoord phys_dispatch_h_core = device->worker_core_from_logical_core(dispatch_h_core);
-
-    // Packetized relay nodes - instantiated only if packetized_path_en_g is set
-    CoreCoord prefetch_relay_mux_core = {1, 0};
-    CoreCoord prefetch_relay_demux_core = {2, 0};
-    CoreCoord dispatch_relay_mux_core = {5, 0};
-    CoreCoord dispatch_relay_demux_core = {6, 0};
-
-    phys_prefetch_relay_mux_core = device->worker_core_from_logical_core(prefetch_relay_mux_core);
-    phys_prefetch_relay_demux_core = device->worker_core_from_logical_core(prefetch_relay_demux_core);
-    phys_dispatch_relay_mux_core = device->worker_core_from_logical_core(dispatch_relay_mux_core);
-    phys_dispatch_relay_demux_core = device->worker_core_from_logical_core(dispatch_relay_demux_core);
-
-    // Packetized components will write their status + a few debug values here:
-    uint32_t l1_unreserved_base = device->allocator()->get_base_allocator_addr(HalMemType::L1);
-    packetized_path_test_results_addr = l1_unreserved_base;
+    auto phys_prefetch_relay_mux_core = device->worker_core_from_logical_core(prefetch_relay_mux_core);
+    auto phys_prefetch_relay_demux_core = device->worker_core_from_logical_core(prefetch_relay_demux_core);
+    auto phys_dispatch_relay_mux_core = device->worker_core_from_logical_core(dispatch_relay_mux_core);
+    auto phys_dispatch_relay_demux_core = device->worker_core_from_logical_core(dispatch_relay_demux_core);
 
     // Want different buffers on each core, instead use big buffer and self-manage it
-    uint32_t l1_unreserved_base_aligned = tt::align(
-        l1_unreserved_base + packetized_path_test_results_size,
-        (1 << DispatchSettings::DISPATCH_BUFFER_LOG_PAGE_SIZE));  // Was not aligned, lately.
-    TT_ASSERT((l1_buf_base_g & ((1 << DispatchSettings::DISPATCH_BUFFER_LOG_PAGE_SIZE) - 1)) == 0);
-
+    const auto& mem_map = DispatchMemMap::get(DISPATCH_CORE_TYPE, 1);
     uint32_t dispatch_buffer_base = l1_buf_base_g;
     uint32_t prefetch_d_buffer_base = l1_buf_base_g;
     uint32_t prefetch_d_buffer_pages = prefetch_d_buffer_size_g >> DispatchSettings::PREFETCH_D_BUFFER_LOG_PAGE_SIZE;
-    dispatch_wait_addr_g = l1_unreserved_base_aligned + hal.get_alignment(HalMemType::L1);
     vector<uint32_t> zero_data(0);
     llrt::write_hex_vec_to_core(device->id(), phys_dispatch_core, zero_data, dispatch_wait_addr_g);
 
     uint32_t prefetch_q_size = prefetch_q_entries_g * sizeof(DispatchSettings::prefetch_q_entry_type);
     uint32_t noc_read_alignment = hal.get_alignment(HalMemType::HOST);
-    uint32_t cmddat_q_base =
-        prefetch_q_base + ((prefetch_q_size + noc_read_alignment - 1) / noc_read_alignment * noc_read_alignment);
+    uint32_t cmddat_q_base = mem_map.cmddat_q_base();
 
     // Implementation syncs w/ device on prefetch_q but not on hugepage, ie, assumes we can't run
     // so far ahead in the hugepage that we overright un-read commands since we'll first
@@ -1750,11 +1743,6 @@ void configure_for_single_chip(
     TT_ASSERT(cmddat_q_size_g >= 2 * max_prefetch_command_size_g);
 
     // NOTE: this test hijacks hugepage
-    chip_id_t mmio_device_id = tt::Cluster::instance().get_associated_mmio_device(device->id());
-    uint16_t channel = tt::Cluster::instance().get_assigned_channel_for_device(device->id());
-    host_hugepage_base = (void*)tt::Cluster::instance().host_dma_address(0, mmio_device_id, channel);
-    host_hugepage_base = (void*)((uint8_t*)host_hugepage_base + dev_hugepage_base_g);
-    host_hugepage_completion_buffer_base_g = (void*)((uint8_t*)host_hugepage_base + hugepage_issue_buffer_size_g);
     uint32_t dev_hugepage_completion_buffer_base = dev_hugepage_base_g + hugepage_issue_buffer_size_g;
     uint32_t* host_hugepage_completion_buffer = (uint32_t*)host_hugepage_completion_buffer_base_g;
     vector<uint32_t> tmp = {dev_hugepage_completion_buffer_base >> 4};
@@ -1840,7 +1828,8 @@ void configure_for_single_chip(
         prefetch_q_base,
         prefetch_q_entries_g * (uint32_t)sizeof(DispatchSettings::prefetch_q_entry_type),
         prefetch_q_rd_ptr_addr,
-        prefetch_q_rd_ptr_addr + sizeof(uint32_t),
+        DispatchMemMap::get(DISPATCH_CORE_TYPE, 1)
+            .get_device_command_queue_addr(CommandQueueDeviceAddrType::PREFETCH_Q_PCIE_RD),
         cmddat_q_base,    // overridden for split below
         cmddat_q_size_g,  // overridden for split below
         0,                // scratch_db_base filled in below if used
@@ -1919,7 +1908,7 @@ void configure_for_single_chip(
             uint32_t prefetch_relay_mux_queue_size_bytes = prefetch_d_buffer_size_g;
 
             // Packetized path buffer, can be at any available address.
-            uint32_t prefetch_relay_demux_queue_start_addr = l1_unreserved_base;
+            uint32_t prefetch_relay_demux_queue_start_addr = prefetch_relay_mux_queue_start_addr;
             constexpr uint32_t prefetch_relay_demux_queue_size_bytes = 0x10000;
 
             // For tests with checkers enabled, packetized path may time out and
@@ -2195,7 +2184,7 @@ void configure_for_single_chip(
             uint32_t dispatch_relay_mux_queue_size_bytes = dispatch_buffer_page_size_g * dispatch_buffer_pages;
 
             // Packetized path buffer, can be at any available address.
-            uint32_t dispatch_relay_demux_queue_start_addr = l1_unreserved_base;
+            uint32_t dispatch_relay_demux_queue_start_addr = dispatch_relay_mux_queue_start_addr;
             constexpr uint32_t dispatch_relay_demux_queue_size_bytes = 0x10000;
 
             // For tests with checkers enabled, packetized path may time out and
@@ -2377,51 +2366,86 @@ int main(int argc, char** argv) {
     init(argc, argv);
 
     bool pass = true;
-    try {
-        int num_devices = tt_metal::GetNumAvailableDevices();
-        if (test_device_id_g >= num_devices) {
-            log_info(
-                LogTest, "Device {} is not valid. Highest valid device id = {}.", test_device_id_g, num_devices - 1);
-            throw std::runtime_error("Invalid Device Id.");
-        }
+    // try {
+    int num_devices = tt_metal::GetNumAvailableDevices();
+    if (test_device_id_g >= num_devices) {
+        log_info(LogTest, "Device {} is not valid. Highest valid device id = {}.", test_device_id_g, num_devices - 1);
+        throw std::runtime_error("Invalid Device Id.");
+    }
 
         tt_metal::IDevice* device = tt_metal::CreateDevice(test_device_id_g);
         tt_metal::Program program = tt_metal::CreateProgram();
 
-        void* host_hugepage_base;
-        uint32_t l1_unreserved_base = device->allocator()->get_base_allocator_addr(HalMemType::L1);
-        uint32_t packetized_path_test_results_size = 1024;
-        uint32_t l1_unreserved_base_aligned = tt::align(
-            l1_unreserved_base + packetized_path_test_results_size,
-            (1 << DispatchSettings::DISPATCH_BUFFER_LOG_PAGE_SIZE));  // Was not aligned, lately.
-        l1_buf_base_g =
-            l1_unreserved_base_aligned + (1 << DispatchSettings::DISPATCH_BUFFER_LOG_PAGE_SIZE);  // Reserve a page.
-        uint32_t prefetch_q_base = l1_buf_base_g;
-        uint32_t prefetch_q_rd_ptr_addr = l1_unreserved_base_aligned;
-        CoreCoord phys_prefetch_relay_mux_core;
-        CoreCoord phys_prefetch_relay_demux_core;
-        CoreCoord phys_dispatch_relay_mux_core;
-        CoreCoord phys_dispatch_relay_demux_core;
-        uint32_t packetized_path_test_results_addr;
-        uint32_t cq_start =
-            DispatchMemMap::get(DISPATCH_CORE_TYPE).get_host_command_queue_addr(CommandQueueHostAddrType::UNRESERVED);
-        uint32_t dev_hugepage_base_g = 2 * (cq_start * sizeof(uint32_t));  // HOST_CQ uses some at the start address
-
-        if (test_device_id_g == 0) {
-            configure_for_single_chip(
-                device,
-                program,
-                host_hugepage_base,
-                prefetch_q_base,
-                prefetch_q_rd_ptr_addr,
-                phys_prefetch_relay_mux_core,
-                phys_prefetch_relay_demux_core,
-                phys_dispatch_relay_mux_core,
-                phys_dispatch_relay_demux_core,
-                packetized_path_test_results_addr,
-                packetized_path_test_results_size,
-                dev_hugepage_base_g);
+        if (!device->is_mmio_capable()) {
+            log_info(LogTest, "Device {} is not valid. Only MMIO devices are supported at this time", test_device_id_g);
+            throw std::runtime_error("Invalid Device Id.");
         }
+
+        auto modified_settings = DispatchSettings::defaults(DISPATCH_CORE_TYPE, tt::Cluster::instance(), 1);
+        modified_settings.prefetch_q_entries(1024)
+            .prefetch_cmddat_q_size(128 * 1024 + 2 * sizeof(CQPrefetchCmd) + 2 * sizeof(CQDispatchCmd))
+            .prefetch_max_cmd_size(modified_settings.prefetch_cmddat_q_size_ / 2)  // note: half this for best perf
+            .prefetch_scratch_db_size(16 * 1024)
+            .kernel_debug_status_enable(0x400)
+            .build();
+
+        DispatchSettings::initialize(modified_settings);
+        const auto& mem_map = DispatchMemMap::get(DISPATCH_CORE_TYPE, 1, true);
+
+        uint32_t packetized_path_test_results_size = modified_settings.kernel_debug_status_enable_;
+        l1_buf_base_g = mem_map.dispatch_buffer_base();
+        dispatch_wait_addr_g =
+            mem_map.get_device_command_queue_addr(CommandQueueDeviceAddrType::DISPATCH_S_SYNC_SEM);  // Any unused
+        prefetch_q_entries_g = mem_map.prefetch_q_entries();
+        cmddat_q_size_g = mem_map.cmddat_q_size();
+        max_prefetch_command_size_g = modified_settings.prefetch_max_cmd_size_;
+        scratch_db_size_g = mem_map.scratch_db_size();
+        prefetch_d_buffer_size_g = mem_map.prefetch_d_buffer_size();
+
+        uint32_t prefetch_q_base = l1_buf_base_g;
+        uint32_t prefetch_q_rd_ptr_addr =
+            mem_map.get_device_command_queue_addr(CommandQueueDeviceAddrType::PREFETCH_Q_RD);
+        uint32_t packetized_path_test_results_addr =
+            mem_map.get_device_command_queue_addr(CommandQueueDeviceAddrType::KERNEL_DEBUG_STATUS);
+
+        uint16_t channel = tt::Cluster::instance().get_assigned_channel_for_device(device->id());
+        uint32_t cq_start = mem_map.get_host_command_queue_addr(CommandQueueHostAddrType::UNRESERVED);
+        uint32_t cq_size = device->sysmem_manager().get_cq_size();
+        uint32_t command_queue_start_addr = get_absolute_cq_offset(channel, 0, cq_size);
+        uint32_t issue_queue_start_addr = command_queue_start_addr + cq_start;
+        uint32_t issue_queue_size = device->sysmem_manager().get_issue_queue_size(0);
+
+        auto prefetch_relay_mux_core = dispatch_core_manager::instance().mux_core(device->id(), channel, 0);
+        auto prefetch_relay_demux_core = dispatch_core_manager::instance().demux_core(device->id(), channel, 0);
+        auto dispatch_relay_mux_core = dispatch_core_manager::instance().mux_d_core(device->id(), channel, 0);
+        auto dispatch_relay_demux_core = dispatch_core_manager::instance().demux_d_core(device->id(), channel, 0);
+
+        auto phys_prefetch_relay_mux_core = device->worker_core_from_logical_core(prefetch_relay_mux_core);
+        auto phys_prefetch_relay_demux_core = device->worker_core_from_logical_core(prefetch_relay_demux_core);
+        auto phys_dispatch_relay_mux_core = device->worker_core_from_logical_core(dispatch_relay_mux_core);
+        auto phys_dispatch_relay_demux_core = device->worker_core_from_logical_core(dispatch_relay_demux_core);
+
+        uint32_t dev_hugepage_base = issue_queue_start_addr;
+
+        chip_id_t mmio_device_id = tt::Cluster::instance().get_associated_mmio_device(device->id());
+        auto host_hugepage_base_ptr = (void*)tt::Cluster::instance().host_dma_address(0, mmio_device_id, channel);
+        host_hugepage_base_ptr = (void*)((uint8_t*)host_hugepage_base_ptr + dev_hugepage_base);
+        host_hugepage_completion_buffer_base_g =
+            (void*)((uint8_t*)host_hugepage_base_ptr + hugepage_issue_buffer_size_g);
+
+        configure_for_single_chip(
+            device,
+            program,
+            host_hugepage_base_ptr,
+            prefetch_q_base,
+            prefetch_q_rd_ptr_addr,
+            prefetch_relay_mux_core,
+            prefetch_relay_demux_core,
+            dispatch_relay_mux_core,
+            dispatch_relay_demux_core,
+            packetized_path_test_results_addr,
+            packetized_path_test_results_size,
+            dev_hugepage_base);
 
         if ((1 << exec_buf_log_page_size_g) * device->allocator()->get_num_banks(BufferType::DRAM) > cmddat_q_size_g) {
             log_fatal("Exec buffer must fit in cmddat_q, page size too large ({})", 1 << exec_buf_log_page_size_g);
@@ -2433,6 +2457,7 @@ int main(int argc, char** argv) {
         log_info(LogTest, "CmdDat buffer size {}", std::to_string(cmddat_q_size_g));
         log_info(LogTest, "Prefetch scratch buffer size {}", std::to_string(scratch_db_size_g));
         log_info(LogTest, "Max command size {}", std::to_string(max_prefetch_command_size_g));
+
         if (test_type_g >= 2) {
             perf_test_g = true;
         }
@@ -2488,8 +2513,8 @@ int main(int argc, char** argv) {
                 terminate_sizes,
                 cmds,
                 terminate_cmds,
-                host_hugepage_base,
-                dev_hugepage_base_g,
+                host_hugepage_base_ptr,
+                dev_hugepage_base,
                 prefetch_q_base,
                 prefetch_q_rd_ptr_addr,
                 phys_prefetch_core_g,
@@ -2518,8 +2543,8 @@ int main(int argc, char** argv) {
                     terminate_sizes,
                     cmds,
                     terminate_cmds,
-                    host_hugepage_base,
-                    dev_hugepage_base_g,
+                    host_hugepage_base_ptr,
+                    dev_hugepage_base,
                     prefetch_q_base,
                     prefetch_q_rd_ptr_addr,
                     phys_prefetch_core_g,
@@ -2538,8 +2563,8 @@ int main(int argc, char** argv) {
                 terminate_sizes,
                 cmds,
                 terminate_cmds,
-                host_hugepage_base,
-                dev_hugepage_base_g,
+                host_hugepage_base_ptr,
+                dev_hugepage_base,
                 prefetch_q_base,
                 prefetch_q_rd_ptr_addr,
                 phys_prefetch_core_g,
@@ -2605,18 +2630,18 @@ int main(int argc, char** argv) {
         }
 
         pass &= tt_metal::CloseDevice(device);
-    } catch (const std::exception& e) {
-        pass = false;
-        log_fatal(e.what());
-    }
+        // } catch (const std::exception& e) {
+        //     pass = false;
+        //     log_fatal(e.what());
+        // }
 
-    tt::llrt::RunTimeOptions::get_instance().set_kernels_nullified(false);
+        tt::llrt::RunTimeOptions::get_instance().set_kernels_nullified(false);
 
-    if (pass) {
-        log_info(LogTest, "test_prefetcher.cpp - Test Passed");
-        return 0;
-    } else {
-        log_fatal(LogTest, "test_prefetcher.cpp - Test Failed\n");
-        return 1;
-    }
+        if (pass) {
+            log_info(LogTest, "test_prefetcher.cpp - Test Passed");
+            return 0;
+        } else {
+            log_fatal(LogTest, "test_prefetcher.cpp - Test Failed\n");
+            return 1;
+        }
 }
