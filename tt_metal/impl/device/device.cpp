@@ -357,17 +357,6 @@ void Device::initialize_device_kernel_defines()
     } else {
         this->device_kernel_defines_.emplace("IS_NOT_POW2_NUM_L1_BANKS", "1");
     }
-
-    // TODO (abhullar): Until we switch to virtual coordinates, we need to pass physical PCIe coordinates to device
-    //  because Blackhole PCIe endpoint is dependent on board type
-    const metal_SocDescriptor& soc_d = tt::Cluster::instance().get_soc_desc(this->id());
-    auto pcie_cores = soc_d.get_pcie_cores();
-    auto grid_size = this->grid_size();
-
-    CoreCoord pcie_core = pcie_cores.empty() ? grid_size : pcie_cores[0];
-
-    this->device_kernel_defines_.emplace("PCIE_NOC_X", std::to_string(pcie_core.x));
-    this->device_kernel_defines_.emplace("PCIE_NOC_Y", std::to_string(pcie_core.y));
 }
 
 void Device::initialize_build() {
