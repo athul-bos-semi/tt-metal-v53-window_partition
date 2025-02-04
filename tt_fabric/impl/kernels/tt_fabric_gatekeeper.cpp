@@ -320,6 +320,7 @@ inline bool send_gk_message(uint64_t dest_addr, packet_header_t* packet) {
     uint32_t wrptr = socket_info->wrptr.ptr;
     noc_addr = dest_addr + offsetof(ctrl_chan_msg_buf, rdptr);
 
+    WAYPOINT("TOYS");
     noc_async_read_one_packet(noc_addr, (uint32_t)(&socket_info->rdptr.ptr), 4);
     noc_async_read_barrier();
     if (fvcc_buf_ptrs_full(wrptr, socket_info->rdptr.ptr)) {
@@ -336,6 +337,7 @@ inline bool retry_gk_message(uint64_t dest_addr, packet_header_t* packet) {
     uint32_t wrptr = socket_info->wrptr.ptr;
     uint64_t noc_addr = dest_addr + offsetof(ctrl_chan_msg_buf, rdptr);
 
+    WAYPOINT("FAKE");
     noc_async_read_one_packet(noc_addr, (uint32_t)(&socket_info->rdptr.ptr), 4);
     noc_async_read_barrier();
     if (fvcc_buf_ptrs_full(wrptr, socket_info->rdptr.ptr)) {
@@ -425,6 +427,7 @@ inline void get_routing_tables() {
             if (temp_mask & 0x1) {
                 uint64_t router_config_addr = get_noc_addr_helper(
                     eth_chan_to_noc_xy[noc_index][channel], eth_l1_mem::address_map::FABRIC_ROUTER_CONFIG_BASE);
+                WAYPOINT("GROW");
                 noc_async_read_one_packet(
                     router_config_addr,
                     (uint32_t)&routing_table[routing_plane],

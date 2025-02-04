@@ -579,10 +579,9 @@ typedef struct fvc_producer_state {
                         } else {
                             // for fused command issue the atomic inc before invalidating the current packet
                             if (current_packet_header.session.command & ATOMIC_INC) {
-                                uint64_t noc_addr =
-                                    ((uint64_t)current_packet_header.packet_parameters.async_wr_atomic_parameters.noc_xy
-                                     << 32) |
-                                    current_packet_header.packet_parameters.async_wr_atomic_parameters.l1_offset;
+                                uint64_t noc_addr = get_noc_addr_helper(
+                                    current_packet_header.packet_parameters.async_wr_atomic_parameters.noc_xy,
+                                    current_packet_header.packet_parameters.async_wr_atomic_parameters.l1_offset);
                                 noc_fast_atomic_increment(
                                     noc_index,
                                     NCRISC_AT_CMD_BUF,

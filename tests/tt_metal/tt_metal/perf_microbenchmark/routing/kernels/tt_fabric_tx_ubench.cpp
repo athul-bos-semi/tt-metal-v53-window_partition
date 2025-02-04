@@ -105,14 +105,15 @@ void kernel_main() {
         reinterpret_cast<tt_l1_ptr uint32_t*>(data_buffer_start_addr), data_buffer_size_words * PACKET_WORD_SIZE_BYTES);
     zero_l1_buf((uint32_t*)local_pull_request, sizeof(local_pull_request_t));
     zero_l1_buf((uint32_t*)client_interface, sizeof(fabric_client_interface_t));
-    client_interface->gk_interface_addr = ((uint64_t)gk_interface_addr_h << 32) | gk_interface_addr_l;
+    client_interface->gk_interface_addr = ((uint64_t)gk_interface_addr_h << NOC_ADDR_COORD_SHIFT) | gk_interface_addr_l;
     client_interface->gk_msg_buf_addr =
-        (((uint64_t)gk_interface_addr_h << 32) | gk_interface_addr_l) + offsetof(gatekeeper_info_t, gk_msg_buf);
+        (((uint64_t)gk_interface_addr_h << NOC_ADDR_COORD_SHIFT) | gk_interface_addr_l) +
+        offsetof(gatekeeper_info_t, gk_msg_buf);
 
     uint64_t data_words_sent = 0;
     uint32_t packet_count = 0;
 
-    uint64_t dst_addr = ((uint64_t)noc_offset << 32 | target_address);
+    uint64_t dst_addr = ((uint64_t)noc_offset << NOC_ADDR_COORD_SHIFT | target_address);
 
     fabric_async_write_add_header(
         data_buffer_start_addr,  // source address in sender’s memory

@@ -10,6 +10,7 @@
 #include "noc_overlay_parameters.h"
 #include "ethernet/dataflow_api.h"
 #include "tt_fabric_interface.h"
+#include "debug/dprint.h"
 
 using namespace tt::tt_fabric;
 
@@ -107,6 +108,7 @@ inline void send_message_to_gk() {
     uint32_t wrptr = client_interface->wrptr.ptr;
     noc_addr = gk_noc_base + offsetof(ctrl_chan_msg_buf, rdptr);
     while (1) {
+        WAYPOINT("SAME");
         noc_async_read_one_packet(noc_addr, (uint32_t)(&client_interface->rdptr.ptr), 4);
         noc_async_read_barrier();
         if (!fvcc_buf_ptrs_full(wrptr, client_interface->rdptr.ptr)) {
@@ -191,8 +193,12 @@ inline void fabric_socket_connect(socket_handle_t* socket_handle) {
 
 inline void fabric_endpoint_init() {
     uint64_t noc_addr = client_interface->gk_interface_addr + offsetof(gatekeeper_info_t, ep_sync);
+    uint32_t bottom32 = client_interface->gk_interface_addr & 0xFFFFFFFF;
+    uint32_t top32 = (client_interface->gk_interface_addr >> 32) & 0xFFFFFFFF;
+    DPRINT << "noc addr " << HEX() << top32 << " " << bottom32 << DEC() << ENDL();
     client_interface->return_status[0] = 0;
     while (1) {
+        WAYPOINT("ENDP");
         noc_async_read_one_packet(noc_addr, (uint32_t)&client_interface->return_status[0], 4);
         noc_async_read_barrier();
         if (client_interface->return_status[0] != 0) {

@@ -359,7 +359,7 @@ void kernel_main() {
     zero_l1_buf((uint32_t*)&packet_header, sizeof(packet_header_t));
     zero_l1_buf((uint32_t*)client_interface, sizeof(fabric_client_interface_t));
     zero_l1_buf((uint32_t*)client_pull_req_buf, sizeof(chan_req_buf));
-    client_interface->gk_interface_addr = ((uint64_t)gk_interface_addr_h << 32) | gk_interface_addr_l;
+    client_interface->gk_interface_addr = ((uint64_t)gk_interface_addr_h << NOC_ADDR_COORD_SHIFT) | gk_interface_addr_l;
     client_interface->gk_msg_buf_addr = client_interface->gk_interface_addr + offsetof(gatekeeper_info_t, gk_msg_buf);
     client_interface->pull_req_buf_addr = xy_local_addr | client_pull_req_buf_addr;
 

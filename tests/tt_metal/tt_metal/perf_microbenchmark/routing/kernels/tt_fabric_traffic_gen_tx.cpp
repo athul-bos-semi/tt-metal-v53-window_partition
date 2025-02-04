@@ -357,6 +357,8 @@ bool test_buffer_handler() {
 }
 
 void kernel_main() {
+    DPRINT << "TX GO" << ENDL();
+    WAYPOINT("INTD");
     tt_fabric_init();
 
     uint32_t rt_args_idx = 0;
@@ -414,9 +416,10 @@ void kernel_main() {
     zero_l1_buf((uint32_t*)local_pull_request, sizeof(local_pull_request_t));
     zero_l1_buf((uint32_t*)&packet_header, sizeof(packet_header_t));
     zero_l1_buf((uint32_t*)client_interface, sizeof(fabric_client_interface_t));
-    client_interface->gk_interface_addr = ((uint64_t)gk_interface_addr_h << 32) | gk_interface_addr_l;
+    client_interface->gk_interface_addr = ((uint64_t)gk_interface_addr_h << NOC_ADDR_COORD_SHIFT) | gk_interface_addr_l;
     client_interface->gk_msg_buf_addr =
-        (((uint64_t)gk_interface_addr_h << 32) | gk_interface_addr_l) + offsetof(gatekeeper_info_t, gk_msg_buf);
+        (((uint64_t)gk_interface_addr_h << NOC_ADDR_COORD_SHIFT) | gk_interface_addr_l) +
+        offsetof(gatekeeper_info_t, gk_msg_buf);
 
     if constexpr (pkt_dest_size_choice == pkt_dest_size_choices_t::RANDOM) {
         input_queue_state.init(src_endpoint_id, prng_seed);
