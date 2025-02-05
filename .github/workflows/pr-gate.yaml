@@ -12,6 +12,20 @@ name: PR Gate
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - afuller/tests-shift-left
+
+  workflow_call:
+    # Map the workflow outputs to job outputs
+    outputs:
+      docker-image.ci-build.tag:
+        description: "Docker tag for the CI Build Docker image for building TT-Metalium et al"
+        value: ${{ jobs.build.outputs.ci-build-tag }}
+      docker-image.ci-test.tag:
+        description: "Docker tag for the CI Test Docker image for testing TT-Metalium et al"
+        value: ${{ jobs.build.outputs.ci-test-tag }}
+
   pull_request:
     types:
       - opened
@@ -39,3 +53,53 @@ jobs:
     uses: ./.github/workflows/build-artifact.yaml
     with:
       version: "22.04"
+
+  metal-tests:
+    needs: pr-gate-build
+    runs-on:
+      - in-service
+      - cloud-virtual-machine
+      - BH
+    container:
+      image: ${{ needs.pr-gate-build.outputs.ci-build-docker-image || 'docker image unresolved!'}}
+      volumes:
+        - /work
+        - /dev/hugepages-1G:/dev/hugepages-1G
+      options: --device /dev/tenstorrent
+    defaults:
+      run:
+        shell: bash
+        working-directory: /work # https://github.com/actions/runner/issues/878
+    steps:
+      - name: workaround
+        run: |
+          # The test-reporting action needs this set, and we can't seem to opt out of it.
+          git config --global --add safe.directory /__w/tt-metal/tt-metal
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.pr-gate-build.outputs.packages-artifact-name || 'packages artifact unresolved!' }}
+          path: /work/pkgs/
+
+      - name: Install packages
+        run: |
+          apt install ./pkgs/tt-metalium_*.deb ./pkgs/tt-metalium-jit_*.deb ./pkgs/tt-metalium-validation_*.deb
+
+      - name: Run a test
+        id: test
+        env:
+          GTEST_COLOR: yes
+          GTEST_OUTPUT: xml:/work/test-reports/
+          TT_METAL_HOME: /usr/libexec/tt-metalium # TODO: Need to get away from env vars!
+        run: |
+          # FIXME: Make a single executable to gather up all tests within this scope
+          /usr/libexec/tt-metalium/validation/unit_tests_llk
+          /usr/libexec/tt-metalium/validation/unit_tests_stl
+
+      - name: Test Report
+        uses: phoenix-actions/test-reporting@v15
+        if: ${{ !cancelled() }}
+        with:
+          name: Test Report
+          path: /work/test-reports/*.xml
+          reporter: jest-junit
