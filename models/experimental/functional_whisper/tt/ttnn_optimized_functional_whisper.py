@@ -287,22 +287,22 @@ def decoder_layer(config, hidden_states, attention_mask, encoder_hidden_states, 
         weight=parameters.final_layer_norm.weight,
         bias=parameters.final_layer_norm.bias,
     )
-    compute_kernel_config = ttnn.WormholeComputeKernelConfig(
-        math_fidelity=ttnn.MathFidelity.HiFi4,
-        math_approx_mode=False,
-        fp32_dest_acc_en=True,
-        packer_l1_acc=True,
-    )
-    # hidden_states = hidden_states @ parameters.fc1.weight + parameters.fc1.bias
-    hidden_states = ttnn.linear(
-        hidden_states, parameters.fc1.weight, bias=parameters.fc1.bias, compute_kernel_config=compute_kernel_config
-    )
+    # compute_kernel_config = ttnn.WormholeComputeKernelConfig(
+    #     math_fidelity=ttnn.MathFidelity.HiFi4,
+    #     math_approx_mode=False,
+    #     fp32_dest_acc_en=True,
+    #     packer_l1_acc=True,
+    # )
+    hidden_states = hidden_states @ parameters.fc1.weight + parameters.fc1.bias
+    # hidden_states = ttnn.linear(
+    #     hidden_states, parameters.fc1.weight, bias=parameters.fc1.bias, compute_kernel_config=compute_kernel_config
+    # )
     hidden_states = gelu(hidden_states)
     hidden_states = dropout(hidden_states, p=0, training=False)
-    hidden_states = ttnn.linear(
-        hidden_states, parameters.fc2.weight, bias=parameters.fc2.bias, compute_kernel_config=compute_kernel_config
-    )
-    # hidden_states = hidden_states @ parameters.fc2.weight + parameters.fc2.bias
+    # hidden_states = ttnn.linear(
+    #     hidden_states, parameters.fc2.weight, bias=parameters.fc2.bias, compute_kernel_config=compute_kernel_config
+    # )
+    hidden_states = hidden_states @ parameters.fc2.weight + parameters.fc2.bias
     hidden_states = dropout(hidden_states, p=0, training=False)
     hidden_states = residual + hidden_states
 

@@ -15,10 +15,6 @@ from transformers import (
     AutoProcessor,
     WhisperForConditionalGeneration,
 )
-from models.utility_functions import (
-    disable_compilation_reports,
-    disable_persistent_kernel_cache,
-)
 from models.experimental.functional_whisper.tt import ttnn_functional_whisper, ttnn_optimized_functional_whisper
 from models.experimental.functional_whisper.reference import torch_functional_whisper
 from models.generation_utils import get_logits_processor
@@ -433,9 +429,10 @@ def run_demo_functional_whisper_for_conditional_generation_dataset(ttnn_model, d
     "num_inputs",
     ((1),),
 )
-def test_demo_for_audio_classification(input_path, ttnn_model, device, num_inputs):
-    disable_persistent_kernel_cache()
-    disable_compilation_reports()
+@pytest.mark.parametrize("enable_async_mode", (True,), indirect=True)
+def test_demo_for_audio_classification(
+    input_path, ttnn_model, device, num_inputs, use_program_cache, enable_async_mode
+):
     return run_demo_functional_whisper_for_audio_classification_inference(input_path, ttnn_model, device, num_inputs)
 
 
@@ -447,9 +444,10 @@ def test_demo_for_audio_classification(input_path, ttnn_model, device, num_input
     "num_inputs",
     ((1),),
 )
-def test_demo_for_conditional_generation(input_path, ttnn_model, device, num_inputs):
-    disable_persistent_kernel_cache()
-    disable_compilation_reports()
+@pytest.mark.parametrize("enable_async_mode", (True,), indirect=True)
+def test_demo_for_conditional_generation(
+    input_path, ttnn_model, device, num_inputs, use_program_cache, enable_async_mode
+):
     return run_demo_functional_whisper_for_conditional_generation_inference(input_path, ttnn_model, device, num_inputs)
 
 
@@ -457,9 +455,8 @@ def test_demo_for_conditional_generation(input_path, ttnn_model, device, num_inp
     "ttnn_model",
     (ttnn_optimized_functional_whisper, ttnn_functional_whisper),
 )
-def test_demo_for_audio_classification_dataset(ttnn_model, device):
-    disable_persistent_kernel_cache()
-    disable_compilation_reports()
+@pytest.mark.parametrize("enable_async_mode", (True,), indirect=True)
+def test_demo_for_audio_classification_dataset(ttnn_model, device, use_program_cache, enable_async_mode):
     return run_demo_functional_whisper_for_audio_classification_dataset(ttnn_model, device)
 
 
@@ -467,7 +464,6 @@ def test_demo_for_audio_classification_dataset(ttnn_model, device):
     "ttnn_model",
     (ttnn_functional_whisper, ttnn_optimized_functional_whisper),
 )
-def test_demo_for_conditional_generation_dataset(ttnn_model, device):
-    disable_persistent_kernel_cache()
-    disable_compilation_reports()
+@pytest.mark.parametrize("enable_async_mode", (True,), indirect=True)
+def test_demo_for_conditional_generation_dataset(ttnn_model, device, use_program_cache, enable_async_mode):
     return run_demo_functional_whisper_for_conditional_generation_dataset(ttnn_model, device)
