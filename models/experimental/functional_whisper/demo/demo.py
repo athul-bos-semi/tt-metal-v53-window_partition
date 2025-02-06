@@ -108,19 +108,24 @@ def run_generate(
                 packer_l1_acc=True,
             )
             # output = output @ ttnn_linear_weight
-            print(output.shape)
+            # if i >=32:
+            #    breakpoint()
+            output = output[:, i // 32 * 32 : i // 32 * 32 + 32, :]
+            # if i >=32:
+            #    breakpoint()
             output = ttnn.linear(output, ttnn_linear_weight, compute_kernel_config=compute_kernel_config)
             output = ttnn.from_device(output)
 
             logits_to_torch = ttnn.to_torch(output)
         else:
+            output = output[:, i // 32 * 32 : i // 32 * 32 + 32, :]
             output = output @ ttnn_linear_weight.T.bfloat16()
             logits_to_torch = output
         end_fwd = time.time()
 
         start_postprocess = time.time()
 
-        next_token_logits = logits_to_torch[:, i, :]
+        next_token_logits = logits_to_torch[:, i % 32, :]
 
         next_tokens_scores = logits_processor(input_features, next_token_logits)
         next_tokens = torch.argmax(next_tokens_scores, dim=-1)
@@ -145,8 +150,8 @@ def run_generate(
 
         end_iter = time.time()
         # logger.info(f"Time taken for iteration {i+1}: {end_iter - start_iter}")
-        if i >= 1:
-            logger.info(f"time taken for inference in iteration {i+1}: {end_iter - start}")
+        # if i >= 1:
+        #    logger.info(f"time taken for inference in iteration {i+1}: {end_iter - start}")
 
         if next_tokens == config.eos_token_id:
             break
