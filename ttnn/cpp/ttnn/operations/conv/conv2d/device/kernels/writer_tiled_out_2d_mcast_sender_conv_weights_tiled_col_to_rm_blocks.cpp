@@ -11,6 +11,15 @@
 #include "debug/dprint_pages.h"
 #endif
 
+inline void print_full_tile(uint32_t cb_id, uint32_t tile_id = 0, bool untilize = false) {
+    DPRINT << "======" << ENDL();
+    for (uint32_t r = 0; r < 32; ++r) {
+        SliceRange sr = SliceRange{.h0 = (uint8_t)r, .h1 = (uint8_t)(r + 1), .hs = 1, .w0 = 0, .w1 = 32, .ws = 1};
+        DPRINT_DATA0({ DPRINT << r << " " << TileSlice(cb_id, tile_id, sr, true, untilize) << ENDL(); });
+    }
+    DPRINT << "++++++" << ENDL();
+}
+
 void kernel_main() {
     // This writer is for output tensor in tile format
 
@@ -26,6 +35,8 @@ void kernel_main() {
     constexpr uint32_t weight_stride_h = get_compile_time_arg_val(10);
     constexpr uint32_t weight_next_block_stride_h = get_compile_time_arg_val(11);
     constexpr uint32_t weight_next_block_stride_w = get_compile_time_arg_val(12);
+
+    // DPRINT << "weight_block_num_tiles: " << weight_block_num_tiles << ENDL();
 
     // Bias arg. Unused if bias fusion is not enabled.
     constexpr uint32_t bias_ntiles = get_compile_time_arg_val(13);
@@ -157,6 +168,7 @@ void kernel_main() {
             // read weight slice - 1 block of weights in width dim and full weight matrix height
             // read slice only once for all activation blocks
             uint32_t weight_current_block_start_tile_id = weight_start_tile_id;
+            // DPRINT << "weight_block_height_num_outer: " << weight_block_height_num_outer << ENDL();
             for (uint32_t weight_tile_h_outer_i = 0; weight_tile_h_outer_i < weight_block_height_num_outer;
                  weight_tile_h_outer_i++) {
                 cb_reserve_back(cb_id_weight, weight_block_num_tiles);
@@ -176,8 +188,14 @@ void kernel_main() {
 
                     uint32_t weight_tile_id = weight_current_block_start_tile_id;
                     // loop over weight block tiles along w
+                    // DPRINT << "WIDTH = " << weight_block_width_ntiles << ENDL();
                     for (uint32_t weight_tile_w_i = 0; weight_tile_w_i < weight_block_width_ntiles; ++weight_tile_w_i) {
+                        // DPRINT << "procitaj weight_tile_id:" << weight_tile_id << ENDL();
                         s_weight.noc_async_read_tile(weight_tile_id, weight_write_l1_addr);
+                        noc_async_read_barrier();
+                        // DPRINT << "to je " << (weight_tile_id / weight_block_height_num_outer) %
+                        // weight_block_num_tiles << ENDL(); print_full_tile(cb_id_weight, (weight_tile_id /
+                        // weight_block_height_num_outer) % weight_block_num_tiles);
                         weight_write_l1_addr += weight_tile_nbytes;
                         weights_block_size_bytes += weight_tile_nbytes;
                         weight_tile_id += 1;
@@ -238,6 +256,8 @@ void kernel_main() {
                 uint32_t bias_block_size_bytes = 0;
                 for (uint32_t bias_tile = bias_tile_offset; bias_tile < bias_tile_offset + bias_ntiles; ++bias_tile) {
                     s_bias.noc_async_read_tile(bias_tile, bias_l1_addr);
+                    noc_async_read_barrier();
+                    // print_full_tile(bias_cb_id, bias_tile - bias_tile_offset);
                     bias_l1_addr += bias_pagesize;
                     bias_block_size_bytes += bias_pagesize;
                 }

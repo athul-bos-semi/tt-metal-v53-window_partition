@@ -7,6 +7,7 @@
 
 #include <tt-metalium/buffer_constants.hpp>
 
+#include "tt-metalium/assert.hpp"
 #include "ttnn/tensor/tensor.hpp"
 #include "ttnn/tensor/types.hpp"
 
@@ -90,7 +91,12 @@ Result conv2d(
 
     ShardOrientation shard_orientation =
         conv_config.transpose_shards ? ShardOrientation::COL_MAJOR : ShardOrientation::ROW_MAJOR;
+<<<<<<< Updated upstream
     bool is_non_tile_mul_width = check_non_tile_mul_width(compute_grid_size, conv_config, in_channels);
+=======
+    bool is_non_tile_mul_width = check_non_tile_mul_width(device, conv_config, in_channels);
+    std::cout << "is_non_tile_mul_width: " << is_non_tile_mul_width << std::endl;
+>>>>>>> Stashed changes
 
     auto [input_tensor_post_tm, parallel_config, output_parallel_config, use_non_tile_height] =
         shard_or_reshard_tensor_if_required(
@@ -140,6 +146,8 @@ Result conv2d(
             true,
             is_non_tile_mul_width);
     }
+
+    // bias_tensor_on_device.value().print();
     // if 1x1 conv w/ stride 1, convert input tensor to tile layout if required
     if (mm_conv) {
         input_tensor_post_tm = ttnn::to_layout(
@@ -163,6 +171,8 @@ Result conv2d(
             .snap_to_tile = !use_non_tile_height,
         };
 
+        std::cout << "num cores: " << sliding_window_config.core_range_set.num_cores() << std::endl;
+        // std:: cout << "range: " << sliding_window_config.core_range_set.ranges().
         bool bypass_halo =
             (parallel_config.shard_scheme == TensorMemoryLayout::WIDTH_SHARDED &&
              sliding_window_config.pad_hw.first == 0 && sliding_window_config.pad_hw.second == 0);
@@ -221,9 +231,14 @@ Result conv2d(
             conv_config.enable_subblock_padding,
             use_non_tile_height);
 
+        // conv_output.print();
+
         if (memory_config.has_value() && memory_config.value() != conv_output.memory_config()) {
             conv_output = ttnn::to_memory_config(conv_output, memory_config.value(), std::nullopt);
         }
+
+        // conv_output.print();
+
         return {conv_output, output_height, output_width, weight_tensor_on_device, bias_tensor_on_device};
     } else {
         // run conv as matmul

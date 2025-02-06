@@ -11,6 +11,15 @@
 #include "debug/dprint_pages.h"
 #endif
 
+inline void print_full_tile(uint32_t cb_id, uint32_t tile_id = 0, bool untilize = false) {
+    DPRINT << "======" << ENDL();
+    for (uint32_t r = 0; r < 32; ++r) {
+        SliceRange sr = SliceRange{.h0 = (uint8_t)r, .h1 = (uint8_t)(r + 1), .hs = 1, .w0 = 0, .w1 = 32, .ws = 1};
+        DPRINT_DATA0({ DPRINT << r << " " << TileSlice(cb_id, tile_id, sr, true, untilize) << ENDL(); });
+    }
+    DPRINT << "++++++" << ENDL();
+}
+
 void kernel_main() {
     // This writer is for output tensor in tile format
     constexpr bool out_in_dram = get_compile_time_arg_val(0) == 1;
@@ -140,6 +149,12 @@ void kernel_main() {
                 noc_semaphore_wait(weights_mcast_receiver_semaphore_addr_ptr, VALID);
 
                 cb_push_back(bias_cb_id, bias_ntiles);
+
+                uint32_t n = bias_ntiles;
+                for (uint32_t i = 0; i < n; i++) {
+                    // print_full_tile(bias_cb_id, i);
+                }
+
                 load_bias = false;
             }
 #endif

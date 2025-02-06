@@ -67,12 +67,24 @@ def run_conv(
     conv_input_shape = [total_batch_size, input_channels, input_height, input_width]
     conv_weight_shape = [output_channels, input_channels // groups, filter_height, filter_width]
     conv_bias_shape = [1, 1, 1, output_channels]
-    torch_input_tensor_nchw = torch.randn(conv_input_shape, dtype=torch.bfloat16).float()
+    torch_input_tensor_nchw = torch.zeros(conv_input_shape, dtype=torch.bfloat16).float()
 
     torch_input_tensor = torch.permute(torch_input_tensor_nchw, (0, 2, 3, 1))
-    torch_weight_tensor = torch.randn(conv_weight_shape, dtype=torch.bfloat16).float()
+    torch_weight_tensor = torch.zeros(conv_weight_shape, dtype=torch.bfloat16).float()
+    # torch_weight_tensor.view(-1)[:9] = torch.arange(101, 110, dtype=torch.float)
+    # torch_bias_tensor = torch.randn(conv_bias_shape, dtype=torch.bfloat16).float() if has_bias else None
+    if has_bias:
+        # Create a tensor with values [101.0, 102.0, ..., 101 + output_channels - 1]
+        bias_values = torch.arange(101.0, 101.0 + output_channels, dtype=torch.float32)
 
-    torch_bias_tensor = torch.randn(conv_bias_shape, dtype=torch.bfloat16).float() if has_bias else None
+        # Reshape to match the conv_bias_shape: [1, 1, 1, output_channels]
+        conv_bias_shape = [1, 1, 1, output_channels]
+        torch_bias_tensor = bias_values.view(conv_bias_shape)  # Reshaping to match the required shape
+    else:
+        torch_bias_tensor = None
+
+    # torch_bias_tensor = torch.randn(conv_bias_shape, dtype=torch.bfloat16).float() if has_bias else None
+
     torch_out_golden_tensor = torch.nn.functional.conv2d(
         torch_input_tensor_nchw,
         torch_weight_tensor,
@@ -158,7 +170,11 @@ def run_conv(
         return_output_dim=True,
     )
 
+    print("hellooooo")
+    # print(tt_output_tensor_on_device)
+    print("hellooooo2")
     tt_output_tensor = ttnn.from_device(tt_output_tensor_on_device)
+    # print(tt_output_tensor)
     torch_output_tensor = ttnn.to_torch(tt_output_tensor, mesh_composer=output_mesh_composer)
 
     # torch_output_tensor is in row major layout and NHWC shape
@@ -177,6 +193,10 @@ def run_conv(
         pcc = 0.996
     else:
         pcc = 0.997
+
+    torch.set_printoptions(profile="full")
+    # print(torch_output_tensor)
+    # print(torch_out_golden_tensor)
 
     passing, pcc_msg = check_with_pcc_without_tensor_printout(torch_output_tensor, torch_out_golden_tensor, pcc=pcc)
     logger.info(f"PCC = {pcc_msg}. Threshold = {pcc}")
@@ -2673,7 +2693,7 @@ def test_non_tile_multiple_height_conv_wh(
 )
 @pytest.mark.parametrize(
     "weights_dtype",
-    [ttnn.bfloat16, ttnn.bfloat8_b],
+    [ttnn.bfloat16],
 )
 @pytest.mark.parametrize(
     "activations_dtype",

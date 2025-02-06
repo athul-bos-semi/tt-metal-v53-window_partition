@@ -4,6 +4,18 @@
 
 #include <stdint.h>
 #include "dataflow_api.h"
+#include "debug/dprint.h"
+#include "dprint.h"
+#include "debug/dprint_pages.h"
+
+inline void print_full_tile(uint32_t cb_id, uint32_t tile_id = 0, bool untilize = false) {
+    DPRINT << "======" << ENDL();
+    for (uint32_t r = 0; r < 32; ++r) {
+        SliceRange sr = SliceRange{.h0 = (uint8_t)r, .h1 = (uint8_t)(r + 1), .hs = 1, .w0 = 0, .w1 = 32, .ws = 1};
+        DPRINT_DATA1({ DPRINT << r << " " << TileSlice(cb_id, tile_id, sr, true, untilize) << ENDL(); });
+    }
+    DPRINT << "++++++" << ENDL();
+}
 
 void kernel_main() {
     const uint32_t dst_addr = get_arg_val<uint32_t>(0);
@@ -28,9 +40,24 @@ void kernel_main() {
     const InterleavedAddrGen<dst0_is_dram> s0 = {
         .bank_base_address = dst_addr + input_width_offset_bytes, .page_size = stick_size};
 #endif
+
+    DPRINT << "hejjj" << ENDL();
+    DPRINT << "block_height: " << block_height << ENDL();
+    DPRINT << "block_width_bytes: " << block_width_bytes << ENDL();
+    DPRINT << "padded_block_width_bytes: " << padded_block_width_bytes << ENDL();
+    DPRINT << "input_width_offset_bytes: " << input_width_offset_bytes << ENDL();
+
     uint32_t stick_id = start_id;
     cb_wait_front(cb_id_out0, block_height);
+
     uint32_t l1_read_addr = get_read_ptr(cb_id_out0);
+
+    tt::data_movement::common::print_bf16_pages(l1_read_addr, 8, 32, 0);
+
+    // for(uint32_t i = 0; i < block_height; i++) {
+
+    // }
+
     for (uint32_t h = 0; h < block_height; ++h) {
         uint64_t dst_noc_addr = get_noc_addr(stick_id, s0);
         noc_async_write(l1_read_addr, dst_noc_addr, block_width_bytes);

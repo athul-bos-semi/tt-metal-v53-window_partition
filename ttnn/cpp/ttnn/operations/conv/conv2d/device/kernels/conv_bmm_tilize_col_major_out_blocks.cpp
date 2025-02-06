@@ -9,7 +9,11 @@
 #include "compute_kernel_api/pack_untilize.h"
 #include "compute_kernel_api/tile_move_copy.h"
 #include "compute_kernel_api/matmul.h"
-// #include "debug/dprint.h"
+#include "debug/dprint.h"
+#include "dprint.h"
+#include "debug/dprint_pages.h"
+#include "debug/dprint_tensix.h"
+// #include "dataflow_api.h"
 
 #ifdef FUSE_BIAS
 #include "compute_kernel_api/bcast.h"
@@ -24,6 +28,27 @@
 // SliceRange srr = SliceRange{.h0 = 0, .h1 = 1, .hs = 8, .w0 = 0, .w1 = 32, .ws = 1};
 // SliceRange srr1 = SliceRange{.h0 = 1, .h1 = 2, .hs = 8, .w0 = 0, .w1 = 32, .ws = 1};
 // SliceRange src = SliceRange{.h0 = 0, .h1 = 32, .hs = 1, .w0 = 0, .w1 = 1, .ws = 1};
+
+// inline void print_full_tile(uint32_t cb_id, uint32_t tile_id = 0, bool untilize = false) {
+//     DPRINT << "======" << ENDL();
+//     for (uint16_t r = 0; r < 32; ++r) {
+//         DPRINT << (uint)r << " : "
+//                << TileSlice(
+//                       cb_id,
+//                       tile_id,
+//                       SliceRange{
+//                           .h0 = (uint8_t)r,
+//                           .h1 = (uint8_t)(r + 1),
+//                           .hs = (uint8_t)1,
+//                           .w0 = (uint8_t)0,
+//                           .w1 = (uint8_t)32,
+//                           .ws = (uint8_t)1},
+//                       true,
+//                       untilize)
+//                << ENDL();
+//     }
+//     DPRINT << "++++++" << ENDL();
+// }
 
 inline void tilize_in(
     uint32_t in_cb_id, uint32_t in_subblock_h, uint32_t in_block_w, uint32_t in_num_subblocks, uint32_t out_cb_id) {
@@ -74,6 +99,7 @@ inline void reblock_and_untilize(
         output_rows_h -= out_sub_block_rows_h;
         within_block_index += out_subblock_w;
     }
+    DPRINT << "consumer pop" << ENDL();
     cb_pop_front(interm_cb_id, num_tiles_in_row_of_subblocks);
 }
 
@@ -125,6 +151,14 @@ void MAIN {
 #ifdef FUSE_BIAS
     constexpr uint32_t bias_ntiles_w = get_compile_time_arg_val(16);
     constexpr uint32_t bias_cb_id = tt::CBIndex::c_2;
+    if (untilize_out) {
+        DPRINT << "untilize: 1" << ENDL();
+    } else {
+        DPRINT << "untilize: 0" << ENDL();
+    }
+
+    // DPRINT << "tiles: " << bias_ntiles_w << ENDL();
+    // tt::compute::common::print_full_tile(bias_cb_id, 0);
     uint32_t bias_block_offset = 0;
     constexpr uint32_t mm_out_cb_id = matmul_partials_cb;
 #else
@@ -386,6 +420,7 @@ void MAIN {
 #ifdef PACKER_L1_ACC
             pack_reconfig_l1_acc(0);
 #endif
+            // tt::compute::common::print_full_tile(bias_cb_id, 0);
             reconfig_data_format(in1_cb_id, matmul_partials_cb, mm_in0_cb_id, bias_cb_id);
             add_bcast_rows_init_short(matmul_partials_cb, bias_cb_id);
 
@@ -399,7 +434,10 @@ void MAIN {
                     for (uint32_t h = 0; h < out_subblock_h; ++h) {
                         uint32_t bcast_tile_i = bias_block_offset + in1_index_subblock_offset;
                         for (uint32_t w = 0; w < out_subblock_w; ++w) {
+                            DPRINT << "iter" << in0_subblock_i << " " << in1_subblock_i << " " << h << " " << w
+                                   << ENDL();
                             add_tiles_bcast_rows(matmul_partials_cb, bias_cb_id, i, bcast_tile_i, i);
+                            // tt::compute::common::print_full_tile(matmul_partials_cb, bcast_tile_i);
                             ++bcast_tile_i;
                             ++i;
                         }
@@ -469,6 +507,10 @@ void MAIN {
         }  // for in0_num_blocks_h
 #ifdef FUSE_BIAS
         bias_block_offset += in1_block_w;
+        // uint32_t l1_read_addr = get_read_ptr(matmul_partials_cb);
+        // tt::data_movement::common::print_bf16_pages(l1_read_addr, 8, 40, 0);
+        // dprint_tensix_dest_reg();
+        // tt::compute::common::print_full_tile(matmul_partials_cb, 0);
 #endif
     }  // for in1_num_blocks_w
 }  // MAIN

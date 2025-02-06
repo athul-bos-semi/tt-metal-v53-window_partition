@@ -9,6 +9,8 @@ import torch
 import ttnn
 from models.utility_functions import is_wormhole_b0, torch_random, is_wormhole_b0, is_grayskull, is_blackhole
 from tests.ttnn.utils_for_testing import assert_with_pcc
+from tests.ttnn.utils_for_testing import assert_with_pcc, check_with_pcc, check_with_pcc_without_tensor_printout
+from loguru import logger
 
 
 @pytest.mark.skipif(is_wormhole_b0() or is_blackhole(), reason="Unsupported on WH and BH")
@@ -275,3 +277,66 @@ def test_sharded_partial_op(device, H, num_cores, num_slices, enable_async):
     tt_out = ttnn.to_torch(out_tt_tensor)
 
     assert_with_pcc(pt_out, tt_out)
+
+
+# sharded_mem_config = ttnn.create_sharded_memory_config_(
+#             dims,
+#             (ttnn.CoreGrid(x=shard_x, y=shard_y)),
+#             ttnn.TensorMemoryLayout.HEIGHT_SHARDED,
+#             ttnn.ShardOrientation.ROW_MAJOR,
+#         )
+#     if shard_type == "width":
+#         sharded_mem_config = ttnn.create_sharded_memory_config_(
+#             dims,
+#             (ttnn.CoreGrid(x=shard_x, y=shard_y)),
+#             ttnn.TensorMemoryLayout.WIDTH_SHARDED,
+#             ttnn.ShardOrientation.ROW_MAJOR,
+#         )
+#     if shard_type == "block":
+#         sharded_mem_config = ttnn.create_sharded_memory_config_(
+#             dims,
+#             (ttnn.CoreGrid(x=shard_x, y=shard_y)),
+#             ttnn.TensorMemoryLayout.BLOCK_SHARDED,
+#             ttnn.ShardOrientation.ROW_MAJOR,
+#         )
+#     input_tensor_a = ttnn.from_torch(
+#         torch_input_tensor_a,
+#         memory_config=sharded_mem_config,
+#         layout=ttnn.TILE_LAYOUT,
+#         device=device,
+#         dtype=input_dtype,
+#     )
+
+
+def test_sharded_to_interleaved(device):
+    conv_input_shape = [1, 16, 16, 64]
+    torch_input_tensor_nchw = torch.randn(conv_input_shape, dtype=torch.bfloat16).float()
+
+    sharded_mem_config = ttnn.create_sharded_memory_config_(
+        conv_input_shape,
+        (ttnn.CoreGrid(x=8, y=8)),
+        ttnn.TensorMemoryLayout.BLOCK_SHARDED,
+        ttnn.ShardOrientation.COL_MAJOR,
+    )
+
+    input_tensor_a = ttnn.from_torch(
+        torch_input_tensor_nchw,
+        memory_config=sharded_mem_config,
+        layout=ttnn.ROW_MAJOR_LAYOUT,
+        device=device,
+        dtype=ttnn.bfloat16,
+    )
+
+    interleaved_memory_config = ttnn.DRAM_MEMORY_CONFIG
+    output_tensor = ttnn.sharded_to_interleaved(input_tensor_a, interleaved_memory_config)
+
+    torch_output_tensor = ttnn.to_torch(output_tensor)
+
+    print(torch_input_tensor_nchw)
+    print(torch_output_tensor)
+
+    pcc = 0.99
+
+    passing, pcc_msg = check_with_pcc_without_tensor_printout(torch_input_tensor_nchw, torch_output_tensor, pcc=pcc)
+    logger.info(f"PCC = {pcc_msg}. Threshold = {pcc}")
+    assert passing

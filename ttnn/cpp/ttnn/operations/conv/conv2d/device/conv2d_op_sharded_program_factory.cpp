@@ -5,6 +5,7 @@
 #include "ttnn/operations/conv/conv2d/conv2d_utils.hpp"
 #include "ttnn/operations/conv/conv2d/device/conv2d_op.hpp"
 #include "ttnn/operations/sliding_window/sliding_window.hpp"
+#include <ostream>
 #include <tt-metalium/work_split.hpp>
 #include <tt-metalium/constants.hpp>
 #include <tt-metalium/tt_metal.hpp>
@@ -199,6 +200,9 @@ std::tuple<CBHandle, CBHandle> create_CBs_for_sharded_input_v2(
 
         bool need_unpad_after_untilize =
             output_shard_shape[1] * output_shard_shape[0] < num_writer_output_tiles * TILE_HW;
+        if (need_unpad_after_untilize) {
+            std::cout << "need_unpad_after_untilize" << std::endl;
+        }
         // If only width is non-tile multiple
         if (need_unpad_after_untilize && !use_non_tile_height && weight_width_sliced) {
             uint32_t num_bytes_for_df = datum_size(out_df);

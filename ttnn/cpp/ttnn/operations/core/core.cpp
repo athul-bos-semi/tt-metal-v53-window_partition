@@ -113,8 +113,12 @@ void copy_host_to_device_tensor(const ttnn::Tensor& host_tensor, ttnn::Tensor de
 
 ttnn::Tensor from_device(const ttnn::Tensor& tensor, bool blocking, uint8_t cq_id) {
     // Currently no direct sharded read support in BLACKHOLE due to alignment issue
+    // std::cout << "sharded: " << std::endl;
+    // tensor.print();
     if (tensor.is_sharded() and (tensor.device()->arch() == tt::ARCH::BLACKHOLE)) {
         auto interleaved_tensor = ttnn::sharded_to_interleaved(cq_id, tensor, ttnn::DRAM_MEMORY_CONFIG, std::nullopt);
+        // std::cout << "interleaved: " << std::endl;
+        // interleaved_tensor.print();
         return interleaved_tensor.cpu(blocking, cq_id);
     } else {
         return tensor.cpu(blocking, cq_id);
