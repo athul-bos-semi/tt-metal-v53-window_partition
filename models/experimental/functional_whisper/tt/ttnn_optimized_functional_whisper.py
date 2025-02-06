@@ -184,10 +184,18 @@ def encoder_layer(config, hidden_states, *, parameters):
         bias=parameters.final_layer_norm.bias,
         memory_config=WHISPER_MEMORY_CONFIG,
     )
+    compute_kernel_config = ttnn.WormholeComputeKernelConfig(
+        math_fidelity=ttnn.MathFidelity.HiFi4,
+        math_approx_mode=False,
+        fp32_dest_acc_en=True,
+        packer_l1_acc=True,
+    )
     hidden_states = hidden_states @ parameters.fc1.weight + parameters.fc1.bias
+    # hidden_states = ttnn.linear(hidden_states, parameters.fc1.weight, bias=parameters.fc1.bias, compute_kernel_config=compute_kernel_config)
     hidden_states = gelu(hidden_states)
     hidden_states = dropout(hidden_states, p=0, training=False)
     hidden_states = hidden_states @ parameters.fc2.weight + parameters.fc2.bias
+    # hidden_states = ttnn.linear(hidden_states, parameters.fc2.weight, bias=parameters.fc2.bias, compute_kernel_config=compute_kernel_config)
     hidden_states = dropout(hidden_states, p=0, training=False)
     hidden_states = residual + hidden_states
 
@@ -279,10 +287,22 @@ def decoder_layer(config, hidden_states, attention_mask, encoder_hidden_states, 
         weight=parameters.final_layer_norm.weight,
         bias=parameters.final_layer_norm.bias,
     )
-    hidden_states = hidden_states @ parameters.fc1.weight + parameters.fc1.bias
+    compute_kernel_config = ttnn.WormholeComputeKernelConfig(
+        math_fidelity=ttnn.MathFidelity.HiFi4,
+        math_approx_mode=False,
+        fp32_dest_acc_en=True,
+        packer_l1_acc=True,
+    )
+    # hidden_states = hidden_states @ parameters.fc1.weight + parameters.fc1.bias
+    hidden_states = ttnn.linear(
+        hidden_states, parameters.fc1.weight, bias=parameters.fc1.bias, compute_kernel_config=compute_kernel_config
+    )
     hidden_states = gelu(hidden_states)
     hidden_states = dropout(hidden_states, p=0, training=False)
-    hidden_states = hidden_states @ parameters.fc2.weight + parameters.fc2.bias
+    hidden_states = ttnn.linear(
+        hidden_states, parameters.fc2.weight, bias=parameters.fc2.bias, compute_kernel_config=compute_kernel_config
+    )
+    # hidden_states = hidden_states @ parameters.fc2.weight + parameters.fc2.bias
     hidden_states = dropout(hidden_states, p=0, training=False)
     hidden_states = residual + hidden_states
 
@@ -401,6 +421,7 @@ def preprocess_inputs(
 
 def whisper(config, encoder_hidden_states, decoder_hidden_states, decoder_attention_mask, *, parameters):
     encoder_hidden_states = encoder(config, encoder_hidden_states, parameters=parameters.encoder)
+    # encoder_out = ttnn.to_torch(encoder_hidden_states)
     last_hidden_state = decoder(
         config,
         decoder_hidden_states,

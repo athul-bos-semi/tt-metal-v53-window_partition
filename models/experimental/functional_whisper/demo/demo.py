@@ -76,6 +76,8 @@ def run_generate(
 
     decoder_start_values = generation_config.pad_token_id * torch.ones(1, 32).to(torch.long)
 
+    encoder_hidden_states = ttnn_model.encoder(config, input_embeds, parameters=parameters.encoder)
+
     for i in range(150):
         if i == 1:
             start = time.time()
@@ -83,16 +85,31 @@ def run_generate(
         start_iter = time.time()
 
         start_fwd = time.time()
-        output = ttnn_model.whisper(
+        # output = ttnn_model.whisper(
+        #     config,
+        #     input_embeds,
+        #     decoder_hidden_states,
+        #     decoder_attention_mask=decoder_attention_mask,
+        #     parameters=parameters,
+        # )
+        output = ttnn_model.decoder(
             config,
-            input_embeds,
             decoder_hidden_states,
             decoder_attention_mask=decoder_attention_mask,
-            parameters=parameters,
+            encoder_hidden_states=encoder_hidden_states,
+            parameters=parameters.decoder,
         )
 
         if not use_torch:
-            output = output @ ttnn_linear_weight
+            compute_kernel_config = ttnn.WormholeComputeKernelConfig(
+                math_fidelity=ttnn.MathFidelity.HiFi4,
+                math_approx_mode=False,
+                fp32_dest_acc_en=True,
+                packer_l1_acc=True,
+            )
+            # output = output @ ttnn_linear_weight
+            print(output.shape)
+            output = ttnn.linear(output, ttnn_linear_weight, compute_kernel_config=compute_kernel_config)
             output = ttnn.from_device(output)
 
             logits_to_torch = ttnn.to_torch(output)

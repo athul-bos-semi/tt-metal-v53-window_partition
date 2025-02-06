@@ -414,12 +414,16 @@ def whisper_original(config, input_features, decoder_input_ids, attention_mask, 
 
 def whisper(config, input_embeds, decoder_hidden_states, decoder_attention_mask, *, parameters):
     encoder_hidden_states = encoder(config, input_embeds, parameters=parameters.encoder)
-    return decoder(
-        config,
-        decoder_hidden_states,
-        decoder_attention_mask=decoder_attention_mask,
-        encoder_hidden_states=encoder_hidden_states,
-        parameters=parameters.decoder,
+    encoder_out = encoder_hidden_states
+    return (
+        decoder(
+            config,
+            decoder_hidden_states,
+            decoder_attention_mask=decoder_attention_mask,
+            encoder_hidden_states=encoder_hidden_states,
+            parameters=parameters.decoder,
+        ),
+        encoder_out,
     )
 
 

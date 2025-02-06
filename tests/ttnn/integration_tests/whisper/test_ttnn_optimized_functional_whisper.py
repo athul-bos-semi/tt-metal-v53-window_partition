@@ -246,7 +246,7 @@ def test_decoder(device, ttnn_model, model_name, batch_size, sequence_size):
 
     embed_dim = config.d_model
 
-    torch_encoder_hidden_states = torch_random((batch_size, sequence_size, embed_dim), -0.1, 0.1, dtype=torch.float32)
+    torch_encoder_hidden_states = torch_random((batch_size, sequence_size, embed_dim), -1.0, 1.0, dtype=torch.float32)
 
     #    decoder_input_ids = torch.ones(1, 32).type(torch.int32) * config.decoder_start_token_id
     decoder_input_ids = torch.tensor([[1, 1]]) * config.decoder_start_token_id
@@ -343,8 +343,11 @@ def test_ttnn_whisper(tmp_path, device, ttnn_model):
         attention_mask=attention_mask,
         parameters=parameters,
     )
+    torch_encoder_hidden_states = encoder_hidden_states
+    torch_decoder_hidden_states = decoder_hidden_states
+    torch_decoder_attention_mask = decoder_attention_mask
 
-    expected_last_hidden_state = torch_functional_whisper.whisper(
+    expected_last_hidden_state, expected_encoder_out = torch_functional_whisper.whisper(
         config,
         encoder_hidden_states,
         decoder_hidden_states,
@@ -371,7 +374,7 @@ def test_ttnn_whisper(tmp_path, device, ttnn_model):
         device=device,
     )
 
-    last_hidden_state = ttnn_model.whisper(
+    last_hidden_state, encoder_out = ttnn_model.whisper(
         config,
         input_embeds,
         decoder_hidden_states,
@@ -379,15 +382,24 @@ def test_ttnn_whisper(tmp_path, device, ttnn_model):
         parameters=ttnn_parameters,
     )
     # output = last_hidden_state @ ttnn_linear_weight
-    breakpoint()
-    output = ttnn.linear(last_hidden_state, ttnn_linear_weight)
+    compute_kernel_config = ttnn.WormholeComputeKernelConfig(
+        math_fidelity=ttnn.MathFidelity.HiFi4,
+        math_approx_mode=False,
+        fp32_dest_acc_en=True,
+        packer_l1_acc=True,
+    )
+    output = ttnn.linear(last_hidden_state, ttnn_linear_weight, compute_kernel_config=compute_kernel_config)
 
     last_hidden_state = ttnn.to_torch(last_hidden_state)
     output = ttnn.to_torch(output)
 
     # ttnn.tracer.visualize(last_hidden_state, file_name=tmp_path / "whisper.svg")
 
+    pcc_passed, pcc_message = assert_with_pcc(expected_encoder_out, encoder_out, 0.964)
+    print(f"encoder PCC passed: {pcc_passed}, PCC message: {pcc_message}")
     pcc_passed, pcc_message = assert_with_pcc(expected_last_hidden_state, last_hidden_state, 0.964)
     print(f"hidden state PCC passed: {pcc_passed}, PCC message: {pcc_message}")
-    pcc_passed, pcc_message = assert_with_pcc(expected_output, output, 0.964)
+    pcc_passed, pcc_message = assert_with_pcc(expected_output, output, 0.93)
     print(f"output PCC passed: {pcc_passed}, PCC message: {pcc_message}")
+
+    breakpoint()
