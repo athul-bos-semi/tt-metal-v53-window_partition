@@ -78,7 +78,6 @@ jobs:
       - name: Link Checker
         uses: lycheeverse/lychee-action@v2
         with:
-          # Check all markdown, html and reStructuredText files in repo (default)
           args: --verbose './README.md' './INSTALLING.md'  './docs/source/**/*.rst' './docs/source/**/*.md'
           fail: true
   check-forbidden-imports:
