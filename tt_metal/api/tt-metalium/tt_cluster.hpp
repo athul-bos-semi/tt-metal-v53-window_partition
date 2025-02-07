@@ -77,7 +77,6 @@ class Cluster {
     const std::unordered_set<CoreCoord>& get_virtual_worker_cores(chip_id_t chip_id) const;
     const std::unordered_set<CoreCoord>& get_virtual_eth_cores(chip_id_t chip_id) const;
 
-    uint32_t get_harvested_rows(chip_id_t chip) const;
     uint32_t get_harvesting_mask(chip_id_t chip) const {
         return this->driver_->get_soc_descriptor(chip).harvesting_masks.tensix_harvesting_mask;
     }
