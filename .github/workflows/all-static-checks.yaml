@@ -79,7 +79,8 @@ jobs:
         uses: lycheeverse/lychee-action@v2
         with:
           # Check all markdown, html and reStructuredText files in repo (default)
-          fail: false
+          args: --verbose './README.md' './INSTALLING.md'  './docs/source/**/*.rst' './docs/source/**/*.md'
+          fail: true
   check-forbidden-imports:
     runs-on: ubuntu-latest
     steps:
