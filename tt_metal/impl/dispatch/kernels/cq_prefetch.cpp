@@ -1238,19 +1238,12 @@ bool process_cmd(
         default:
             DPRINT << "prefetch invalid command:" << (uint32_t)cmd->base.cmd_id << " " << cmd_ptr << " "
                    << cmddat_q_base << ENDL();
-            DPRINT << DEC() << *(uint32_t*)cmd_ptr << ENDL();
-            DPRINT << DEC() << *((uint32_t*)cmd_ptr + 1) << ENDL();
-            DPRINT << DEC() << *((uint32_t*)cmd_ptr + 2) << ENDL();
-            DPRINT << DEC() << *((uint32_t*)cmd_ptr + 3) << ENDL();
-            DPRINT << DEC() << *((uint32_t*)cmd_ptr + 4) << ENDL();
-            DPRINT << DEC() << *((uint32_t*)cmd_ptr + 5) << ENDL();
-            DPRINT << DEC() << *((uint32_t*)cmd_ptr + 6) << ENDL();
-            DPRINT << DEC() << *((uint32_t*)cmd_ptr + 7) << ENDL();
-            DPRINT << DEC() << *((uint32_t*)cmd_ptr + 8) << ENDL();
-            DPRINT << DEC() << *((uint32_t*)cmd_ptr + 9) << ENDL();
-            DPRINT << DEC() << *((uint32_t*)cmd_ptr + 10) << ENDL();
-            DPRINT << DEC() << *((uint32_t*)cmd_ptr + 11) << ENDL();
-            DPRINT << DEC() << *((uint32_t*)cmd_ptr + 12) << ENDL();
+            // DPRINT << DEC() << *(uint32_t*)cmd_ptr << ENDL();
+            // DPRINT << DEC() << *((uint32_t*)cmd_ptr + 1) << ENDL();
+            // DPRINT << DEC() << *((uint32_t*)cmd_ptr + 2) << ENDL();
+            // DPRINT << DEC() << *((uint32_t*)cmd_ptr + 3) << ENDL();
+            // DPRINT << DEC() << *((uint32_t*)cmd_ptr + 4) << ENDL();
+            // DPRINT << DEC() << *((uint32_t*)cmd_ptr + 5) << ENDL();
             WAYPOINT("!CMD");
             ASSERT(0);
     }
