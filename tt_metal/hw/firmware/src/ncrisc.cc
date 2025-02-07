@@ -69,16 +69,6 @@ inline __attribute__((always_inline)) void set_ncrisc_resume_addr() {
 #endif
 }
 
-inline __attribute__((always_inline)) void notify_brisc_and_wait() {
-#if NCRISC_FIRMWARE_IN_IRAM
-    notify_brisc_and_halt(RUN_SYNC_MSG_DONE);
-#else
-    while (*ncrisc_run != RUN_SYNC_MSG_GO) {
-        invalidate_l1_cache();
-    }
-#endif
-}
-
 inline __attribute__((always_inline)) void signal_ncrisc_completion() {
 #if !NCRISC_FIRMWARE_IN_IRAM
     *ncrisc_run = RUN_SYNC_MSG_DONE;
@@ -113,17 +103,53 @@ int main(int argc, char *argv[]) {
     // If NCRISC has IRAM it needs to halt before BRISC copies data from L1 to IRAM
     // Need to save address to jump to after BRISC resumes NCRISC
     set_ncrisc_resume_addr();
+    // This copy of the launch message read pointer is either the same as
+    // BRISC's or ahead by 1 if the BRISC is currently finishing up processing
+    // the previous kernel.
+    uint32_t launch_msg_rd_ptr = 0;
 
     // Cleanup profiler buffer incase we never get the go message
     while (1) {
         WAYPOINT("W");
-        notify_brisc_and_wait();
-        DeviceZoneScopedMainN("NCRISC-FW");
-
-        uint32_t launch_msg_rd_ptr = mailboxes->launch_msg_rd_ptr;
+#if NCRISC_FIRMWARE_IN_IRAM
+        notify_brisc_and_halt(RUN_SYNC_MSG_DONE);
+        launch_msg_rd_ptr = mailboxes->launch_msg_rd_ptr;
         launch_msg_t* launch_msg = &(mailboxes->launch[launch_msg_rd_ptr]);
+#else
+        bool allow_preload = true;
+#if defined(PROFILE_KERNEL)
+        // Wait for brisc to trigger a load to ensure uploading the previous kernel's profile data completes before the
+        // DevizeZoneScopedMainN below.
+        allow_preload = false;
+#endif
+        while (!allow_preload ||
+               !(mailboxes->launch[launch_msg_rd_ptr].kernel_config.preload & DISPATCH_ENABLE_FLAG_PRELOAD)) {
+            invalidate_l1_cache();
+            uint32_t sync_value = *ncrisc_run;
+            if (sync_value == RUN_SYNC_MSG_RESET_READ_PTR) {
+                launch_msg_rd_ptr = mailboxes->launch_msg_rd_ptr;
+                *ncrisc_run = RUN_SYNC_MSG_DONE;
+            } else if (sync_value == RUN_SYNC_MSG_GO || sync_value == RUN_SYNC_MSG_LOAD) {
+                break;
+            }
+        }
+        launch_msg_t* launch_msg = &(mailboxes->launch[launch_msg_rd_ptr]);
+        if (!(launch_msg->kernel_config.enables & DISPATCH_CLASS_MASK_TENSIX_ENABLE_DM1)) {
+            if (launch_msg->kernel_config.mode == DISPATCH_MODE_DEV) {
+                launch_msg_rd_ptr = (launch_msg_rd_ptr + 1) & (launch_msg_buffer_num_entries - 1);
+            }
+            while (*ncrisc_run != RUN_SYNC_MSG_GO) {
+                invalidate_l1_cache();
+            }
+            *ncrisc_run = RUN_SYNC_MSG_DONE;
+            continue;
+        }
+#endif
+        DeviceZoneScopedMainN("NCRISC-FW");
+        WAYPOINT("L");
 
-        uint32_t kernel_config_base = firmware_config_init(mailboxes, ProgrammableCoreType::TENSIX, DISPATCH_CLASS_TENSIX_DM1);
+        uint32_t kernel_config_base = firmware_config_init<true>(
+            mailboxes, ProgrammableCoreType::TENSIX, DISPATCH_CLASS_TENSIX_DM1, launch_msg_rd_ptr);
         int index = static_cast<std::underlying_type<TensixProcessorTypes>::type>(TensixProcessorTypes::DM1);
 
 #if defined(ARCH_WORMHOLE)
@@ -142,22 +168,34 @@ int main(int argc, char *argv[]) {
         cb_l1_base = (uint32_t tt_l1_ptr*)(kernel_config_base + launch_msg->kernel_config.remote_cb_offset);
         end_cb_index = launch_msg->kernel_config.min_remote_cb_start_index;
         experimental::setup_remote_cb_interfaces(cb_l1_base, end_cb_index);
-        WAYPOINT("R");
 
         void (*kernel_address)(uint32_t) = (void (*)(uint32_t))
             (kernel_config_base + launch_msg->kernel_config.kernel_text_offset[index]);
 #ifdef ARCH_BLACKHOLE
+        while (*ncrisc_run != RUN_SYNC_MSG_GO) {
+            invalidate_l1_cache();
+        }
+        WAYPOINT("R");
         (*kernel_address)((uint32_t)kernel_address);
 #elif defined(ARCH_WORMHOLE)
+        // Wait for BRISC to process previous DONE message.
+        while (*ncrisc_run != RUN_SYNC_MSG_LOAD) {
+            invalidate_l1_cache();
+        }
+        WAYPOINT("R");
         // Jumping to IRAM causes bizarre behavior, so signal the brisc to reset the ncrisc to the IRAM address.
         mailboxes->ncrisc_halt.resume_addr = (uint32_t)kernel_init;
-        notify_brisc_and_halt_to_iram(RUN_SYNC_MSG_DONE, (uint32_t)kernel_address);
+        notify_brisc_and_halt_to_iram(RUN_SYNC_MSG_WAITING_FOR_RESET, (uint32_t)kernel_address);
 #else
+        WAYPOINT("R");
         kernel_init((uint32_t)kernel_address);
 #endif
         RECORD_STACK_USAGE();
         WAYPOINT("D");
 
+        if (launch_msg->kernel_config.mode == DISPATCH_MODE_DEV) {
+            launch_msg_rd_ptr = (launch_msg_rd_ptr + 1) & (launch_msg_buffer_num_entries - 1);
+        }
         signal_ncrisc_completion();
     }
 

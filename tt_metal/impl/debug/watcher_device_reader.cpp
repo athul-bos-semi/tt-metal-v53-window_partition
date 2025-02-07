@@ -627,6 +627,10 @@ void WatcherDeviceReader::DumpRunState(CoreDescriptor& core, const launch_msg_t*
         code = 'D';
     } else if (state == RUN_MSG_RESET_READ_PTR) {
         code = 'R';
+    } else if (state == RUN_SYNC_MSG_LOAD) {
+        code = 'L';
+    } else if (state == RUN_SYNC_MSG_WAITING_FOR_RESET) {
+        code = 'W';
     }
     if (code == 'U') {
         LogRunningKernels(core, launch_msg);

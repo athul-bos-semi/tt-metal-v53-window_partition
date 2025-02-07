@@ -327,28 +327,36 @@ inline void set_ncrisc_kernel_resume_deassert_address() {
 
 inline void run_triscs(dispatch_core_processor_masks enables) {
     if (enables & DISPATCH_CLASS_MASK_TENSIX_ENABLE_COMPUTE) {
-        mailboxes->slave_sync.all = RUN_SYNC_MSG_ALL_TRISCS_GO;
+        mailboxes->slave_sync.trisc0 = RUN_SYNC_MSG_GO;
+        mailboxes->slave_sync.trisc1 = RUN_SYNC_MSG_GO;
+        mailboxes->slave_sync.trisc2 = RUN_SYNC_MSG_GO;
     }
 }
 
 inline void finish_ncrisc_copy_and_run(dispatch_core_processor_masks enables) {
     if (enables & DISPATCH_CLASS_MASK_TENSIX_ENABLE_DM1) {
         l1_to_ncrisc_iram_copy_wait();
+#if defined(ARCH_BLACKHOLE)
         mailboxes->slave_sync.dm1 = RUN_SYNC_MSG_GO;
+#endif
 
 #if NCRISC_FIRMWARE_IN_IRAM
         // Note: only ncrisc is in reset, so just deasserts ncrisc
         deassert_all_reset();
 #endif
+    } else {
+        mailboxes->slave_sync.dm1 = RUN_SYNC_MSG_GO;
     }
 }
 
 inline void start_ncrisc_kernel_run(dispatch_core_processor_masks enables) {
 #ifdef NCRISC_FIRMWARE_KERNEL_SPLIT
     if (enables & DISPATCH_CLASS_MASK_TENSIX_ENABLE_DM1) {
+        WAYPOINT("WRW");
         // The NCRISC behaves badly if it jumps from L1 to IRAM, so instead halt it and then reset it to the IRAM
         // address it provides.
-        while (mailboxes->slave_sync.dm1 != RUN_SYNC_MSG_DONE);
+        while (mailboxes->slave_sync.dm1 != RUN_SYNC_MSG_WAITING_FOR_RESET);
+        WAYPOINT("WRD");
         mailboxes->slave_sync.dm1 = RUN_SYNC_MSG_GO;
         volatile tt_reg_ptr uint32_t* cfg_regs = core.cfg_regs_base(0);
         cfg_regs[NCRISC_RESET_PC_PC_ADDR32] = mailboxes->ncrisc_halt.resume_addr;
@@ -421,6 +429,13 @@ int main() {
             if (go_message_signal == RUN_MSG_RESET_READ_PTR) {
                 // Set the rd_ptr on workers to specified value
                 mailboxes->launch_msg_rd_ptr = 0;
+#if !NCRISC_FIRMWARE_IN_IRAM
+                // mailboxes->slave_sync.dm1 should always be RUN_SYNC_MSG_DONE at this point.
+                mailboxes->slave_sync.dm1 = RUN_SYNC_MSG_RESET_READ_PTR;
+                while (mailboxes->slave_sync.dm1 != RUN_SYNC_MSG_DONE) {
+                    invalidate_l1_cache();
+                }
+#endif
                 // Querying the noc_index is safe here, since the RUN_MSG_RESET_READ_PTR go signal is currently guaranteed
                 // to only be seen after a RUN_MSG_GO signal, which will set the noc_index to a valid value.
                 // For future proofing, the noc_index value is initialized to 0, to ensure an invalid NOC txn is not issued.
@@ -449,6 +464,11 @@ int main() {
             // Only include this iteration in the device profile if the launch message is valid. This is because all workers get a go signal regardless of whether
             // they're running a kernel or not. We don't want to profile "invalid" iterations.
             DeviceZoneScopedMainN("BRISC-FW");
+
+            mailboxes->slave_sync.dm1 = RUN_SYNC_MSG_LOAD;
+            // On wormhole when the kernel has NCRISC enabled, mailboxes->slave_sync.dm1 shouldn't be touched from now
+            // until start_ncrisc_kernel_run, as it's now controlled by NCRISC.
+
             uint32_t launch_msg_rd_ptr = mailboxes->launch_msg_rd_ptr;
             launch_msg_t* launch_msg_address = &(mailboxes->launch[launch_msg_rd_ptr]);
             DeviceValidateProfiler(launch_msg_address->kernel_config.enables);
@@ -492,7 +512,6 @@ int main() {
             finish_ncrisc_copy_and_run(enables);
 
             // Run the BRISC kernel
-            WAYPOINT("R");
             if (enables & DISPATCH_CLASS_MASK_TENSIX_ENABLE_DM0) {
                 uint32_t end_cb_index = launch_msg_address->kernel_config.max_local_cb_end_index;
                 setup_local_cb_read_write_interfaces(
@@ -504,6 +523,7 @@ int main() {
                 experimental::setup_remote_cb_interfaces<true>(cb_l1_base, end_cb_index);
                 start_ncrisc_kernel_run(enables);
                 int index = static_cast<std::underlying_type<TensixProcessorTypes>::type>(TensixProcessorTypes::DM0);
+                WAYPOINT("R");
                 void (*kernel_address)(uint32_t) = (void (*)(uint32_t))
                     (kernel_config_base + launch_msg_address->kernel_config.kernel_text_offset[index]);
                 (*kernel_address)((uint32_t)kernel_address);

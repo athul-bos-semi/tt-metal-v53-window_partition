@@ -31,7 +31,9 @@ uint32_t noc_posted_writes_num_issued[NUM_NOCS];
 
 void kernel_launch(uint32_t kernel_base_addr) {
 #if defined(DEBUG_NULL_KERNELS) && !defined(DISPATCH_KERNEL)
+    WAYPOINT("NGW");
     wait_for_go_message();
+    WAYPOINT("NGD");
     DeviceZoneScopedMainChildN("NCRISC-KERNEL");
 #ifdef KERNEL_RUN_TIME
     uint64_t end_time = c_tensix_core::read_wall_clock() + KERNEL_RUN_TIME;
