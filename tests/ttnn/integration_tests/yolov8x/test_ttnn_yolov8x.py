@@ -101,7 +101,11 @@ def run_submodule(x, submodule):
 
 
 @pytest.mark.parametrize("device_params", [{"l1_small_size": 32768}], indirect=True)
-@pytest.mark.parametrize("input_tensor", [torch.rand((1, 3, 640, 640))], ids=["input_tensor1"])
+@pytest.mark.parametrize(
+    "input_tensor",
+    [(torch.rand((1, 3, 320, 320))), torch.rand((1, 3, 640, 640))],
+    ids=["input_tensor1", "input_tensor2"],
+)
 def test_demo(device, input_tensor):
     disable_persistent_kernel_cache()
 
@@ -109,14 +113,16 @@ def test_demo(device, input_tensor):
 
     state_dict = torch_model.state_dict()
 
-    parameters = custom_preprocessor(device, state_dict)
+    inp_h, inp_w = input_tensor.shape[2], input_tensor.shape[3]
+
+    parameters = custom_preprocessor(device, state_dict, inp_h=inp_h, inp_w=inp_w)
 
     ttnn_input = input_tensor.permute((0, 2, 3, 1))
 
     ttnn_input = ttnn.from_torch(ttnn_input, dtype=ttnn.bfloat16, layout=ttnn.ROW_MAJOR_LAYOUT, device=device)
 
     with torch.inference_mode():
-        ttnn_model_output = YOLOv8x(device, ttnn_input, parameters)[0]
+        ttnn_model_output = YOLOv8x(device, ttnn_input, parameters, res=(inp_h, inp_w))[0]
         ttnn_model_output = ttnn.to_torch(ttnn_model_output)
 
     with torch.inference_mode():

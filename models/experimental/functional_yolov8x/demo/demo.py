@@ -109,7 +109,8 @@ def save_yolo_predictions_by_model(result, save_dir, image_path, model_name):
         ("models/experimental/functional_yolov8x/demo/images/test3.jpg", "tt_model"),
     ],
 )
-def test_demo(device, source, model_type):
+@pytest.mark.parametrize("res", [(320, 320)])
+def test_demo(device, source, model_type, res):
     disable_persistent_kernel_cache()
 
     if model_type == "torch_model":
@@ -117,7 +118,7 @@ def test_demo(device, source, model_type):
         logger.info("Inferencing using Torch Model")
     else:
         state_dict = attempt_load("yolov8x.pt", map_location="cpu").state_dict()
-        parameters = custom_preprocessor(device, state_dict)
+        parameters = custom_preprocessor(device, state_dict, inp_h=320, inp_w=320)
         model = partial(YOLOv8x, device=device, parameters=parameters)
         logger.info("Inferencing using ttnn Model")
 
@@ -214,7 +215,7 @@ def test_demo(device, source, model_type):
     for batch in dataset:
         paths, im0s, s = batch
 
-        im = preprocess(im0s)
+        im = preprocess(im0s, res=res)
 
         ttnn_im = im.permute((0, 2, 3, 1))
         ttnn_im = ttnn.from_torch(ttnn_im, dtype=ttnn.bfloat16, layout=ttnn.ROW_MAJOR_LAYOUT, device=device)
