@@ -16,14 +16,6 @@ static constexpr size_t DESTINATION_HOP_COUNT = 1;
 // TODO: make 0 and the associated field to num mcast destinations
 static constexpr size_t LAST_MCAST_DESTINATION = 1;
 
-
-void write_unicast_blocking(uint32_t local_address, uint64_t dest_address, uint32_t size_bytes) {
-    // TODO - PERF: noc_async_write<NOC_MAX_BURST_SIZE>
-    // Don't do it yet because we want to sweep perf on buffer size
-    noc_async_write(local_address, dest_address, size_bytes);
-    noc_async_write_barrier();
-}
-
 void print_pkt_hdr_routing_fields(volatile tt::fabric::PacketHeader *const packet_start) {
     switch (packet_start->chip_send_type) {
         case tt::fabric::CHIP_UNICAST: {
@@ -59,6 +51,7 @@ void print_pkt_header_noc_fields(volatile tt::fabric::PacketHeader *const packet
             break;
         }
         case tt::fabric::NocSendType::NOC_MULTICAST: {
+            ASSERT(false); // unimplemented
             break;
         }
     }
@@ -76,7 +69,7 @@ void print_pkt_header(volatile tt::fabric::PacketHeader *const packet_start) {
 
 
 // Since we unicast to local, we must omit the packet header
-void execute_chip_unicast_to_local_chip(volatile tt::fabric::PacketHeader *const packet_start) {
+void execute_chip_unicast_to_local_chip(volatile tt::fabric::PacketHeader *const packet_start, uint32_t transaction_id) {
     auto const& header = *packet_start;
     uint32_t payload_start_address = reinterpret_cast<size_t>(packet_start) + sizeof(tt::fabric::PacketHeader);
 
@@ -93,7 +86,7 @@ void execute_chip_unicast_to_local_chip(volatile tt::fabric::PacketHeader *const
                         header.command_fields.unicast_write.noc_y,
                         header.command_fields.unicast_write.address);
                     auto const size = header.command_fields.unicast_write.size - sizeof(tt::fabric::PacketHeader);
-                    write_unicast_blocking(payload_start_address, dest_address, size);
+                    noc_async_write_one_packet_with_trid(payload_start_address, dest_address, size, transaction_id);
 
                 }break;
                 case tt::fabric::NocSendType::NOC_MULTICAST: {
@@ -106,8 +99,7 @@ void execute_chip_unicast_to_local_chip(volatile tt::fabric::PacketHeader *const
                         header.command_fields.mcast_write.address);
                     auto const num_dests = header.command_fields.mcast_write.mcast_rect_size_x * header.command_fields.mcast_write.mcast_rect_size_y;
                     auto const size = header.command_fields.mcast_write.size - sizeof(tt::fabric::PacketHeader);
-                    noc_async_write_multicast_one_packet(payload_start_address, mcast_dest_address, size, num_dests);
-                    noc_async_write_barrier();
+                    noc_async_write_one_packet_with_trid(payload_start_address, mcast_dest_address, size, num_dests, transaction_id);
 
                 }break;
                 default: {
@@ -177,28 +169,25 @@ void update_packet_header_for_next_hop(volatile tt::fabric::PacketHeader * packe
 // Modifies the packet header (decrements hop counts) so ...
 //
 // !!!WARNING!!!
-// !!!WARNING!!! do NOT call before determining if the packet should be consumed locally or forwarded
+// !!!WARNING!!! * do NOT call before determining if the packet should be consumed locally or forwarded
+// !!!WARNING!!! * ENSURE DOWNSTREAM EDM HAS SPACE FOR PACKET BEFORE CALLING
 // !!!WARNING!!!
-tt::fabric::SendStatus forward_payload_to_downstream_edm(
+void forward_payload_to_downstream_edm(
     volatile tt::fabric::PacketHeader *packet_header,
-    tt::fabric::WorkerToFabricEdmSender &downstream_edm_interface
+    tt::fabric::WorkerToFabricEdmSender &downstream_edm_interface,
+    uint8_t transaction_id
     ) {
     DPRINT << "Fwding pkt to downstream\n";
     // TODO: PERF - this should already be getting checked by the caller so this should be redundant make it an ASSERT
-    bool safe_to_send = downstream_edm_interface.consumer_has_space();
-    if (!safe_to_send) {
-        return tt::fabric::SendStatus::NOT_SENT;
-    }
+    ASSERT(downstream_edm_interface.edm_has_space_for_packet()); // best effort check
 
     // This is a good place to print the packet header for debug if you are trying to inspect packets
     // because it is before we start manipulating the header for forwarding
     update_packet_header_for_next_hop(packet_header);
-
-    downstream_edm_interface.send_payload_blocking_from_address(
+    downstream_edm_interface.send_payload_non_blocking_from_address_with_trid(
         reinterpret_cast<size_t>(packet_header),
-        packet_header->get_payload_size_including_header());
-
-    return tt::fabric::SendStatus::SENT_PAYLOAD_AND_SYNC;
+        packet_header->get_payload_size_including_header(),
+        transaction_id);
 }
 
 
