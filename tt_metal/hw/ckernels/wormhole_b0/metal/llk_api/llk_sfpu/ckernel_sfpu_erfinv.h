@@ -21,8 +21,8 @@ sfpi_inline vFloat calculate_sqrt_custom(vFloat in) {
     vFloat val = in;
     vFloat out;
     v_if(val != 0.0f) {
-        vUInt magic = reinterpret<vUInt>(vFloat(s2vFloat16b(0x5f37)));
-        vFloat approx = reinterpret<vFloat>(magic - (reinterpret<vUInt>(val) >> 1));
+        vInt magic = reinterpret<vInt>(vFloat(s2vFloat16b(0x5f37)));
+        vFloat approx = reinterpret<vFloat>(magic - (reinterpret<vInt>(val) >> 1));
         for (int r = 0; r < 2; r++) {
             approx = ((approx * approx) * (val * -0.5f) + 1.5f) * approx;
         }
