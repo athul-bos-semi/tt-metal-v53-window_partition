@@ -30,19 +30,7 @@ ttnn::Tensor SliceOperation::invoke(
     const auto& input_shape = input_tensor.get_logical_shape();
     uint32_t input_rank = input_shape.rank();
     auto input_layout = input_tensor.get_layout();
-    if (input_rank < 2) {
-        TT_FATAL(input_layout == Layout::ROW_MAJOR, "Slice is not supported for non-row-major tensors with rank < 2");
-    }
-    TT_FATAL(
-        input_rank == begins.size(), "Input rank {} and begins {} must have the same size", input_rank, begins.size());
-    TT_FATAL(begins.size() == ends.size(), "Start {} and end {} must have the same size", begins.size(), ends.size());
-    TT_FATAL(
-        step.size() == begins.size(),
-        "Step {} must have the same size as start {} and end",
-        step.size(),
-        begins.size());
 
-    auto input_layout = input_tensor.get_layout();
     if (input_rank == 0) {
         return input_tensor;
     }
