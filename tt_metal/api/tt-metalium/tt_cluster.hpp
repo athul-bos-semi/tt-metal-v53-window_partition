@@ -258,7 +258,7 @@ class Cluster {
         const bool &skip_driver_allocs = false);
     void start_driver(tt_device_params &device_params) const;
 
-    void get_metal_desc_from_tt_desc(const std::set<chip_id_t>& chip_ids);
+    void get_metal_desc_from_tt_desc();
     void generate_virtual_to_umd_coord_mapping();
     void generate_logical_to_virtual_coord_mapping();
     void generate_virtual_to_profiler_flat_id_mapping();
