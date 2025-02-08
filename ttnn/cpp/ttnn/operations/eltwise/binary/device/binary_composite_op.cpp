@@ -180,7 +180,7 @@ Tensor _atan2(const Tensor& input_a, const Tensor& input_b, const std::optional<
 }
 
 Tensor ExecuteDiv::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input,
     float value,
     bool accurate_mode,
@@ -212,7 +212,7 @@ Tensor ExecuteDiv::invoke(
 }
 
 Tensor ExecuteDiv::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input_a,
     const Tensor& input_b,
     bool accurate_mode,
@@ -366,40 +366,41 @@ Tensor ExecutePrelu::invoke(
     Tensor result = ttnn::where(ttnn::ltz(input_a, output_mem_config), ttnn::multiply(input_a, b), input_a);
     return result;
 }
+
+Tensor run_remainder(
+    const Tensor& input_a, const Tensor& input_b, float t_nan, const std::optional<MemoryConfig>& output_mem_config) {
+    Tensor result = ttnn::subtract(
+        input_a,
+        ttnn::multiply(
+            input_b, ttnn::div(input_a, input_b, true, "floor", output_mem_config), std::nullopt, output_mem_config),
+        std::nullopt,
+        output_mem_config);
+    result = ttnn::where(ttnn::ge(result, input_b), ttnn::subtract(result, input_b), result);
+    result = ttnn::where(ttnn::ltz(input_b), ttnn::add(result, input_b), result);
+    result = ttnn::where(ttnn::eq(input_a, input_b, std::nullopt, output_mem_config), 0.0f, result);
+    result = ttnn::where(ttnn::eqz(input_a), 0.0f, ttnn::where(ttnn::eqz(input_b), t_nan, result));
+    result = ttnn::where(ttnn::logical_and(ttnn::eqz(input_a), ttnn::eqz(input_b)), t_nan, result);
+    return result;
+}
 // Binary remainder will be overloaded by unary remainder in another PR
 Tensor ExecuteBinaryRemainder::invoke(
     const Tensor& input_a, const Tensor& input_b, const std::optional<MemoryConfig>& output_mem_config) {
     auto arch = input_a.device()->arch();
     TT_FATAL(arch != tt::ARCH::GRAYSKULL, "Op is supported on Wormhole or Blackhole");
     DataType input_dtype = input_a.get_dtype();
+
+    float t_nan = tt::tt_metal::experimental::hal::get_nan();
+
     // No typecast for FP32 input
-    if (input_dtype == DataType::FLOAT32 && input_b.get_dtype() == DataType::FLOAT32) {
-        Tensor result = ttnn::subtract(
-            input_a,
-            ttnn::multiply(
-                input_b,
-                ttnn::div(input_a, input_b, true, "floor", output_mem_config),
-                std::nullopt,
-                output_mem_config),
-            std::nullopt,
-            output_mem_config);
-        result = ttnn::where(ttnn::ge(result, input_b), ttnn::subtract(result, input_b), result);
-        result = ttnn::where(ttnn::ltz(input_b), ttnn::add(result, input_b), result);
-        result = ttnn::where(ttnn::eq(input_a, input_b, std::nullopt, output_mem_config), 0.0f, result);
-        return result;
-    }
-    Tensor a = typecast(input_a, DataType::FLOAT32);
-    Tensor b = typecast(input_b, DataType::FLOAT32);
-    Tensor result = ttnn::subtract(
-        a,
-        ttnn::multiply(
-            b, ttnn::div(input_a, input_b, false, "floor", output_mem_config), std::nullopt, output_mem_config),
-        std::nullopt,
-        output_mem_config);
-    result = ttnn::where(ttnn::ge(result, b), ttnn::subtract(result, b), result);
-    result = ttnn::where(ttnn::ltz(b), ttnn::add(result, b), result);
-    result = ttnn::where(ttnn::eq(input_a, input_b, std::nullopt, output_mem_config), 0.0f, result);
-    return typecast(result, input_dtype);
+    const auto do_typecast = input_dtype != DataType::FLOAT32 or input_b.get_dtype() != DataType::FLOAT32;
+    const auto& a = do_typecast ? typecast(input_a, DataType::FLOAT32) : input_a;
+    const auto& b = do_typecast ? typecast(input_b, DataType::FLOAT32) : input_b;
+
+    // Perform the remainder operation
+    Tensor result = run_remainder(a, b, t_nan, output_mem_config);
+
+    // Return the result, typecasted if necessary
+    return do_typecast ? typecast(result, input_dtype) : result;
 }
 
 Tensor ExecuteBinaryRemainder::invoke(
@@ -478,9 +479,15 @@ Tensor _floor_div(const Tensor& input_a, const Tensor& input_b, const std::optio
 Tensor _scatter(const Tensor& input_a, const Tensor& input_b, const std::optional<MemoryConfig>& output_mem_config) {
     tt::tt_metal::Array4D start_index = {0, 0, 0, 0};
     Tensor index_pad = ttnn::pad(
-        0, ttnn::ones_like(input_a), input_b.get_padded_shape().to_array_4D(), start_index, 0, false, std::nullopt);
-    Tensor temp_a =
-        ttnn::pad(0, input_a, input_b.get_padded_shape().to_array_4D(), start_index, 0, false, std::nullopt);
+        ttnn::DefaultQueueId,
+        ttnn::ones_like(input_a),
+        input_b.get_padded_shape().to_array_4D(),
+        start_index,
+        0,
+        false,
+        std::nullopt);
+    Tensor temp_a = ttnn::pad(
+        ttnn::DefaultQueueId, input_a, input_b.get_padded_shape().to_array_4D(), start_index, 0, false, std::nullopt);
     return ttnn::where(index_pad, temp_a, input_b);
 }
 
@@ -583,7 +590,7 @@ Tensor ExecuteLCM::invoke(
 
 // power - floating point exponent
 Tensor ExecutePower::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input_a,
     float exponent,
     const std::optional<MemoryConfig>& output_mem_config,
@@ -629,7 +636,7 @@ Tensor ExecutePower::invoke(
 
 // power - integer exponent
 Tensor ExecutePower::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input,
     uint32_t exponent,
     const std::optional<MemoryConfig>& output_mem_config,
@@ -648,7 +655,7 @@ Tensor ExecutePower::invoke(
 
 // power - tensor exponent
 Tensor ExecutePower::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input,
     const Tensor& exponent,
     const std::optional<MemoryConfig>& output_mem_config,
@@ -668,7 +675,7 @@ Tensor ExecutePower::invoke(
 
 // power - scalar input
 Tensor ExecutePower::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     float input_a,
     const Tensor& exponent,
     const std::optional<MemoryConfig>& output_mem_config,
@@ -687,7 +694,7 @@ Tensor ExecutePower::invoke(
 }
 
 Tensor ExecuteRsub::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input_tensor_a,
     const Tensor& input_tensor_b,
     const std::optional<const DataType>& output_dtype,
@@ -727,7 +734,7 @@ Tensor ExecuteRsub::invoke(
 }
 
 Tensor ExecuteRsub::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input_tensor_a,
     const float input_b,
     const std::optional<MemoryConfig>& memory_config,
@@ -752,7 +759,7 @@ Tensor ExecuteRsub::invoke(
 
 // Bitwise AND
 Tensor ExecuteBitwiseAnd::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input_tensor_a,
     const Tensor& input_tensor_b,
     const std::optional<MemoryConfig>& memory_config,
@@ -776,7 +783,7 @@ Tensor ExecuteBitwiseAnd::invoke(
 }
 
 Tensor ExecuteBitwiseAnd::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input_tensor_a,
     const int32_t input_b,
     const std::optional<MemoryConfig>& memory_config,
@@ -802,7 +809,7 @@ Tensor ExecuteBitwiseAnd::invoke(
 
 // Bitwise OR
 Tensor ExecuteBitwiseOr::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input_tensor_a,
     const Tensor& input_tensor_b,
     const std::optional<MemoryConfig>& memory_config,
@@ -826,7 +833,7 @@ Tensor ExecuteBitwiseOr::invoke(
 }
 
 Tensor ExecuteBitwiseOr::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input_tensor_a,
     const int32_t input_b,
     const std::optional<MemoryConfig>& memory_config,
@@ -852,7 +859,7 @@ Tensor ExecuteBitwiseOr::invoke(
 
 // Bitwise XOR
 Tensor ExecuteBitwiseXor::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input_tensor_a,
     const Tensor& input_tensor_b,
     const std::optional<MemoryConfig>& memory_config,
@@ -876,7 +883,7 @@ Tensor ExecuteBitwiseXor::invoke(
 }
 
 Tensor ExecuteBitwiseXor::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input_tensor_a,
     const int32_t input_b,
     const std::optional<MemoryConfig>& memory_config,
@@ -902,7 +909,7 @@ Tensor ExecuteBitwiseXor::invoke(
 
 // Bitwise Left Shift
 Tensor ExecuteBitwiseLeftShift::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input_tensor_a,
     const Tensor& input_tensor_b,
     const std::optional<MemoryConfig>& memory_config,
@@ -921,7 +928,7 @@ Tensor ExecuteBitwiseLeftShift::invoke(
 }
 
 Tensor ExecuteBitwiseLeftShift::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input_tensor_a,
     const int32_t input_b,
     const std::optional<MemoryConfig>& memory_config,
@@ -942,7 +949,7 @@ Tensor ExecuteBitwiseLeftShift::invoke(
 
 // Bitwise Right Shift
 Tensor ExecuteBitwiseRightShift::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input_tensor_a,
     const Tensor& input_tensor_b,
     const std::optional<MemoryConfig>& memory_config,
@@ -961,7 +968,7 @@ Tensor ExecuteBitwiseRightShift::invoke(
 }
 
 Tensor ExecuteBitwiseRightShift::invoke(
-    uint8_t queue_id,
+    QueueId queue_id,
     const Tensor& input_tensor_a,
     const int32_t input_b,
     const std::optional<MemoryConfig>& memory_config,

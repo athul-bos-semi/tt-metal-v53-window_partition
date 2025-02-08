@@ -174,7 +174,7 @@ void bind_binary_backward_concat(
                const std::optional<ttnn::MemoryConfig>& memory_config,
                const std::optional<ttnn::Tensor>& input_grad,
                const std::optional<ttnn::Tensor>& other_grad,
-               const uint8_t& queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
+               QueueId queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
                 return self(
                     grad_tensor,
                     input_tensor_a,
@@ -278,7 +278,7 @@ void bind_binary_backward_addalpha(
                const std::optional<ttnn::MemoryConfig>& memory_config,
                const std::optional<ttnn::Tensor>& input_a_grad,
                const std::optional<ttnn::Tensor>& input_b_grad,
-               const uint8_t& queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
+               QueueId queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
                 return self(
                     queue_id,
                     grad_tensor,
@@ -312,7 +312,8 @@ void bind_binary_backward_bias_gelu(
     const std::string& parameter_b_doc,
     string parameter_b_value,
     const std::string& description,
-    const std::string& supported_dtype = "BFLOAT16") {
+    const std::string& supported_dtype = "BFLOAT16",
+    const std::string_view note = "") {
     auto doc = fmt::format(
         R"doc(
 
@@ -345,6 +346,8 @@ void bind_binary_backward_bias_gelu(
 
             bfloat8_b/bfloat4_b is only supported on TILE_LAYOUT
 
+            {9}
+
         Example:
 
             >>> grad_tensor = ttnn.from_torch(torch.tensor([[1, 2], [3, 4]], dtype=torch.bfloat16), layout=ttnn.TILE_LAYOUT, device=device)
@@ -361,7 +364,8 @@ void bind_binary_backward_bias_gelu(
         parameter_b_doc,
         parameter_b_value,
         description,
-        supported_dtype);
+        supported_dtype,
+        note);
 
     bind_registered_operation(
         module,
@@ -472,7 +476,7 @@ void bind_binary_backward_sub_alpha(
                const std::optional<ttnn::MemoryConfig>& memory_config,
                const std::optional<ttnn::Tensor>& input_grad,
                const std::optional<ttnn::Tensor>& other_grad,
-               const uint8_t& queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
+               QueueId queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
                 return self(
                     queue_id,
                     grad_tensor,
@@ -559,7 +563,7 @@ void bind_binary_backward_rsub(
                const std::optional<ttnn::MemoryConfig>& memory_config,
                const std::optional<ttnn::Tensor>& input_grad,
                const std::optional<ttnn::Tensor>& other_grad,
-               const uint8_t& queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
+               QueueId queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
                 return self(
                     queue_id,
                     grad_tensor,
@@ -650,7 +654,7 @@ void bind_binary_bw_mul(
                const float scalar,
                const std::optional<ttnn::MemoryConfig>& memory_config,
                const std::optional<ttnn::Tensor>& input_grad,
-               const uint8_t& queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
+               QueueId queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
                 return self(queue_id, grad_tensor, input_tensor_a, scalar, memory_config, input_grad);
             },
             py::arg("grad_tensor"),
@@ -671,7 +675,7 @@ void bind_binary_bw_mul(
                const std::optional<ttnn::MemoryConfig>& memory_config,
                const std::optional<ttnn::Tensor>& input_grad,
                const std::optional<ttnn::Tensor>& other_grad,
-               const uint8_t& queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
+               QueueId queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
                 return self(
                     queue_id,
                     grad_tensor,
@@ -780,7 +784,7 @@ void bind_binary_bw(
                const float scalar,
                const std::optional<ttnn::MemoryConfig>& memory_config,
                const std::optional<ttnn::Tensor>& input_grad,
-               const uint8_t& queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
+               QueueId queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
                 return self(queue_id, grad_tensor, input_tensor_a, scalar, memory_config, input_grad);
             },
             py::arg("grad_tensor"),
@@ -801,7 +805,7 @@ void bind_binary_bw(
                const std::optional<ttnn::MemoryConfig>& memory_config,
                const std::optional<ttnn::Tensor>& input_grad,
                const std::optional<ttnn::Tensor>& other_grad,
-               const uint8_t& queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
+               QueueId queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
                 return self(
                     queue_id,
                     grad_tensor,
@@ -916,7 +920,7 @@ void bind_binary_bw_div(
                const std::optional<std::string> round_mode,
                const std::optional<ttnn::MemoryConfig>& memory_config,
                const std::optional<ttnn::Tensor>& input_grad,
-               const uint8_t& queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
+               QueueId queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
                 return self(queue_id, grad_tensor, input_tensor_a, scalar, round_mode, memory_config, input_grad);
             },
             py::arg("grad_tensor"),
@@ -939,7 +943,7 @@ void bind_binary_bw_div(
                const std::optional<ttnn::MemoryConfig>& memory_config,
                const std::optional<ttnn::Tensor>& input_grad,
                const std::optional<ttnn::Tensor>& other_grad,
-               const uint8_t& queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
+               QueueId queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
                 return self(
                     queue_id,
                     grad_tensor,
@@ -1132,7 +1136,7 @@ void bind_binary_backward_assign(
                const ttnn::Tensor& input_tensor,
                const std::optional<ttnn::MemoryConfig>& memory_config,
                const std::optional<ttnn::Tensor>& input_grad,
-               const uint8_t& queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
+               QueueId queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
                 return self(queue_id, grad_tensor, input_tensor, memory_config, input_grad);
             },
             py::arg("grad_tensor"),
@@ -1152,7 +1156,7 @@ void bind_binary_backward_assign(
                const std::optional<ttnn::MemoryConfig>& memory_config,
                const std::optional<ttnn::Tensor>& input_a_grad,
                const std::optional<ttnn::Tensor>& input_b_grad,
-               const uint8_t& queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
+               QueueId queue_id) -> std::vector<std::optional<ttnn::Tensor>> {
                 return self(
                     queue_id,
                     grad_tensor,
@@ -1322,7 +1326,8 @@ void py_module(py::module& module) {
         "none",
         R"doc(Performs backward operations for bias_gelu on :attr:`input_tensor_a` and :attr:`input_tensor_b` or :attr:`input_tensor` and :attr:`bias`, with given :attr:`grad_tensor` using given :attr:`approximate` mode.
         :attr:`approximate` mode can be 'none', 'tanh'.)doc",
-        R"doc(BFLOAT16, BFLOAT8_B)doc");
+        R"doc(BFLOAT16)doc",
+        R"doc(For more details about BFLOAT8_B, refer to the `BFLOAT8_B limitations <../tensor.html#limitation-of-bfloat8-b>`_.)doc");
 }
 
 }  // namespace binary_backward
