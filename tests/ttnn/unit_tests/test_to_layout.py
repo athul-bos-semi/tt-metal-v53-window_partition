@@ -10,7 +10,14 @@ import torch
 import ttnn
 
 from tests.ttnn.utils_for_testing import assert_with_pcc, check_with_pcc_without_tensor_printout
-from models.utility_functions import is_grayskull, is_blackhole, torch_random, skip_for_grayskull
+from models.utility_functions import (
+    is_grayskull,
+    is_blackhole,
+    torch_random,
+    skip_for_grayskull,
+    skip_for_wormhole_b0,
+    is_wormhole_b0,
+)
 
 
 @pytest.mark.parametrize("height", [32, 30])
@@ -341,6 +348,43 @@ def test_untilize_w4(shape, input_layout, output_layout, device):
     assert_with_pcc(input_a[:, :, :1, :10912], output_tensor)
 
 
+@skip_for_wormhole_b0()
+@pytest.mark.parametrize("width", [56, 64])
+def test_shard_untilize_with_unpad(device, width):
+    torch.manual_seed(2005)
+    torch_tensor = torch.rand(1, 1, 127008, width, dtype=torch.bfloat16)
+    sharded_memory_config = ttnn.create_sharded_memory_config(
+        [
+            127008 // 63,  # division with // 63 because shard is on that many cores,
+            64,  # width is 64 because it needs to be padded when going to TILE_LAYOUT
+        ],
+        core_grid=ttnn.CoreRangeSet(
+            {
+                ttnn.CoreRange(
+                    ttnn.CoreCoord(0, 0),
+                    ttnn.CoreCoord(7, 6),
+                ),
+                ttnn.CoreRange(
+                    ttnn.CoreCoord(0, 7),
+                    ttnn.CoreCoord(6, 7),
+                ),
+            }
+        ),
+        strategy=ttnn.ShardStrategy.HEIGHT,
+        use_height_and_width_as_shard_shape=True,
+    )
+    input_tensor = ttnn.from_torch(
+        torch_tensor, layout=ttnn.TILE_LAYOUT, device=device, memory_config=sharded_memory_config
+    )
+    # uncomment to test on dram (passes)
+    # input_tensor = ttnn.to_memory_config(input_tensor, ttnn.DRAM_MEMORY_CONFIG)
+    output_tensor = ttnn.to_layout(input_tensor, layout=ttnn.ROW_MAJOR_LAYOUT)
+    output_tensor = ttnn.to_torch(output_tensor)
+    assert torch_tensor.shape == output_tensor.shape
+    assert_with_pcc(torch_tensor, output_tensor, 0.9999)
+
+
+@skip_for_wormhole_b0()
 def test_shard_untilize(device):
     torch.manual_seed(2005)
 
