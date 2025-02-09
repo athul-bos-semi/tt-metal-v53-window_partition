@@ -195,13 +195,9 @@ jobs:
           nice -n 19 $build_command
 
       - name: 🛠️ Compile
-        env:
-          CCACHE_LOGFILE: /work/ccache.log
         run: |
           # --target install is for the tarball that should get replaced by proper packaging later
           nice -19 cmake --build build --target install
-          ls -al /work
-          grep -A 3 'miss' /work/ccache.log
 
       - name: 📦 Package
         run: |

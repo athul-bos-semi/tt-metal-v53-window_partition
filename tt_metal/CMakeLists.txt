@@ -92,6 +92,7 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
                 impl/dispatch/kernels/cq_helpers.hpp
                 impl/dispatch/kernels/packet_queue_ctrl.hpp
                 impl/dispatch/kernels/packet_queue.hpp
+                include/compute_kernel_api/blank.h
                 # Kernel sources
                 impl/dispatch/kernels/cq_dispatch_slave.cpp
                 impl/dispatch/kernels/cq_dispatch.cpp
