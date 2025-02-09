@@ -106,7 +106,41 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
             TYPE HEADERS
             BASE_DIRS
                 ${CMAKE_PROJECT_SOURCE_DIR} # FIXME
-            FILES test_kernels/misc/ping_legal_l1s.cpp
+            FILES
+                test_kernels/misc/add_two_ints.cpp
+                test_kernels/misc/brisc_print.cpp
+                test_kernels/misc/dprint_raise_wait_brisc.cpp
+                test_kernels/misc/dprint_raise_wait_ncrisc.cpp
+                test_kernels/misc/erisc_print.cpp
+                test_kernels/misc/full_grid_eltwise_device_reuse.cpp
+                test_kernels/misc/increment_runtime_arg.cpp
+                test_kernels/misc/local_mem.cpp
+                test_kernels/misc/ncrisc_print.cpp
+                test_kernels/misc/ping_legal_l1s.cpp
+                test_kernels/misc/print_buffering.cpp
+                test_kernels/misc/print_hang.cpp
+                test_kernels/misc/print_one_int.cpp
+                test_kernels/misc/print_simple.cpp
+                test_kernels/misc/print_tile_brisc.cpp
+                test_kernels/misc/print_tile_ncrisc.cpp
+                test_kernels/misc/print_tile_trisc.cpp
+                test_kernels/misc/print_with_wait.cpp
+                test_kernels/misc/runtime_args_kernel.cpp
+                test_kernels/misc/trisc_print.cpp
+                test_kernels/misc/watcher_asserts.cpp
+                test_kernels/misc/watcher_pause.cpp
+                test_kernels/misc/watcher_ringbuf.cpp
+                test_kernels/misc/watcher_waypoints.cpp
+                test_kernels/misc/circular_buffer/cb_non_blocking_master_test_kernel.cpp
+                test_kernels/misc/circular_buffer/cb_non_blocking_slave_test_kernel.cpp
+                test_kernels/misc/global_circular_buffer/validate_receiver_config.cpp
+                test_kernels/misc/global_circular_buffer/validate_sender_config.cpp
+                test_kernels/misc/sub_device/incrementer.cpp
+                test_kernels/misc/sub_device/persistent_remote_waiter.cpp
+                test_kernels/misc/sub_device/persistent_waiter.cpp
+                test_kernels/misc/sub_device/sync_and_datacopy.cpp
+                test_kernels/misc/sub_device/sync_and_increment.cpp
+                test_kernels/misc/sub_device/syncer.cpp
     )
 
     install(
