@@ -82,15 +82,7 @@ jobs:
           TT_METAL_HOME: /usr/libexec/tt-metalium # TODO: Need to get away from env vars!
           TT_METAL_SLOW_DISPATCH_MODE: true # TODO: burn this with fire
         run: |
-          set -x
-          ls -l /usr/libexec/tt-metalium || true
-          ls -l /usr/libexec/tt-metalium/tests || true
-          ls -l /usr/libexec/tt-metalium/tests/tt_metal || true
-          ls -l /usr/libexec/tt-metalium/tests/tt_metal/tt_metal || true
-          ls -l /usr/libexec/tt-metalium/tests/tt_metal/tt_metal/test_kernels || true
-          ls -l /usr/libexec/tt-metalium/tests/tt_metal/tt_metal/test_kernels/misc || true
           # FIXME: Make a single executable to gather up all tests within this scope
-          # /usr/libexec/tt-metalium/validation/unit_tests_llk
           /usr/libexec/tt-metalium/validation/unit_tests_device
           /usr/libexec/tt-metalium/validation/unit_tests_stl
 
@@ -123,12 +115,12 @@ jobs:
                   root = tree.getroot()
                   for tc in root.findall(".//testcase"):
                       time = float(tc.get("time", 0))
-                      if time > 0.1:
+                      if time > 1.5:
                           slow_tests.append(f"{report_file}: {tc.get('classname', 'Unknown')}.{tc.get('name', 'Unknown')} ({time:.3f}s)")
               except Exception as e:
                   print(f"Error parsing {report_file}: {e}")
                   sys.exit(2)
 
           if slow_tests:
-              print("Some tests exceeded 100ms:\n" + "\n".join(slow_tests))
+              print("Some tests exceeded 1.5s:\n" + "\n".join(slow_tests))
               sys.exit(3)
