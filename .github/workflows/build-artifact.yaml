@@ -201,7 +201,7 @@ jobs:
           # --target install is for the tarball that should get replaced by proper packaging later
           nice -19 cmake --build build --target install
           ls -al /work
-          grep 'miss' /work/ccache.log
+          grep -A 3 'miss' /work/ccache.log
 
       - name: 📦 Package
         run: |
