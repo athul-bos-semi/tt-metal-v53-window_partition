@@ -15,17 +15,6 @@ on:
   push:
     branches:
       - afuller/tests-shift-left
-
-  workflow_call:
-    # Map the workflow outputs to job outputs
-    outputs:
-      docker-image.ci-build.tag:
-        description: "Docker tag for the CI Build Docker image for building TT-Metalium et al"
-        value: ${{ jobs.build.outputs.ci-build-tag }}
-      docker-image.ci-test.tag:
-        description: "Docker tag for the CI Test Docker image for testing TT-Metalium et al"
-        value: ${{ jobs.build.outputs.ci-test-tag }}
-
   pull_request:
     types:
       - opened
@@ -103,3 +92,30 @@ jobs:
           name: Test Report
           path: /work/test-reports/*.xml
           reporter: jest-junit
+
+      - name: Check for slow tests
+        run: |
+          REPORTS=$(find /work/test-reports/ -name "*.xml")
+          if [[ -z "$REPORTS" ]]; then
+            echo "No test reports found."
+            exit 1
+          fi
+
+          python3 - <<EOF
+          import xml.etree.ElementTree as ET
+          import sys
+
+          slow_tests = []
+
+          for report_file in sys.argv[1:]:
+              tree = ET.parse(report_file)
+              root = tree.getroot()
+              for tc in root.findall(".//testcase"):
+                  time = float(tc.get("time", 0))
+                  if time > 0.1:
+                      slow_tests.append(f"{report_file}: {tc.get('classname', 'Unknown')}.{tc.get('name', 'Unknown')} ({time:.3f}s)")
+
+          if slow_tests:
+              print("Some tests exceeded 100ms:\n" + "\n".join(slow_tests))
+              exit(1)
+          EOF $REPORTS
