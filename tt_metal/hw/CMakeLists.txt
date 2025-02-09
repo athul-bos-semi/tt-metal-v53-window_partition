@@ -284,6 +284,8 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
                 inc/ethernet/tunneling.h
                 inc/ethernet/tt_eth_ss_regs.h
                 ckernels/blackhole/metal/llk_io/llk_io.h
+                ckernels/blackhole/metal/common/chlkc_list.h
+                ckernels/blackhole/metal/llk_api/llk_param_structs.h
     )
 endif()
 

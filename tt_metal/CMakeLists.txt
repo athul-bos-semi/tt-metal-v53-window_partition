@@ -97,7 +97,13 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
                 impl/dispatch/kernels/cq_dispatch.cpp
                 impl/dispatch/kernels/cq_prefetch.cpp
                 kernels/compute/blank.cpp
+                kernels/compute/eltwise_binary.cpp
+                kernels/compute/eltwise_sfpu.cpp
                 kernels/dataflow/blank.cpp
+                kernels/dataflow/reader_binary_diff_lengths.cpp
+                kernels/dataflow/reader_unary.cpp
+                kernels/dataflow/writer_unary_1.cpp
+                kernels/dataflow/writer_unary.cpp
     )
 endif()
 
