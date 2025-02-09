@@ -141,6 +141,10 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
                 test_kernels/misc/sub_device/sync_and_datacopy.cpp
                 test_kernels/misc/sub_device/sync_and_increment.cpp
                 test_kernels/misc/sub_device/syncer.cpp
+                test_kernels/dataflow/unit_tests/command_queue/arbiter_hang.cpp
+                test_kernels/dataflow/unit_tests/command_queue/dispatcher_kernel_size_and_runtime.cpp
+                test_kernels/dataflow/unit_tests/command_queue/pcie_write_16b.cpp
+                test_kernels/dataflow/unit_tests/command_queue/random_program.cpp
     )
 
     install(
