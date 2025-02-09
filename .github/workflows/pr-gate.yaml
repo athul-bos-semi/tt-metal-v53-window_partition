@@ -102,21 +102,25 @@ jobs:
             exit 1
           fi
 
-          python3 - <<EOF
+          python3 -c "
           import xml.etree.ElementTree as ET
           import sys
 
+          report_files = '''$REPORTS'''.split()
           slow_tests = []
 
-          for report_file in sys.argv[1:]:
-              tree = ET.parse(report_file)
-              root = tree.getroot()
-              for tc in root.findall(".//testcase"):
-                  time = float(tc.get("time", 0))
-                  if time > 0.1:
-                      slow_tests.append(f"{report_file}: {tc.get('classname', 'Unknown')}.{tc.get('name', 'Unknown')} ({time:.3f}s)")
+          for report_file in report_files:
+              try:
+                  tree = ET.parse(report_file)
+                  root = tree.getroot()
+                  for tc in root.findall('.//testcase'):
+                      time = float(tc.get('time', 0))
+                      if time > 0.1:
+                          slow_tests.append(f'{report_file}: {tc.get('classname', 'Unknown')}.{tc.get('name', 'Unknown')} ({time:.3f}s)')
+              except Exception as e:
+                  print(f'Error parsing {report_file}: {e}')
 
           if slow_tests:
-              print("Some tests exceeded 100ms:\n" + "\n".join(slow_tests))
-              exit(1)
-          EOF $REPORTS
+              print('Some tests exceeded 100ms:\\n' + '\\n'.join(slow_tests))
+              sys.exit(1)
+          "
