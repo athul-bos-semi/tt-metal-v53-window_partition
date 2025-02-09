@@ -25,7 +25,8 @@ namespace tt::tt_metal {
 namespace {
 
 // Single RISC, no CB's here. Very simple.
-Program create_simple_datamovement_program(Buffer& input, Buffer& output, Buffer& l1_buffer) {
+Program create_simple_datamovement_program(
+    Buffer& input, Buffer& output, Buffer& l1_buffer, bool rt_arg_per_core_vec = false) {
     Program program = CreateProgram();
     IDevice* device = input.device();
     constexpr CoreCoord core = {0, 0};
@@ -44,8 +45,15 @@ Program create_simple_datamovement_program(Buffer& input, Buffer& output, Buffer
     const std::vector<uint32_t> runtime_args = {
         l1_buffer.address(), input.address(), input_bank_id, output.address(), output_bank_id, l1_buffer.size()};
 
-    // Note - this interface doesn't take Buffer, just data.
-    SetRuntimeArgs(program, dram_copy_kernel_id, core, runtime_args);
+    // Very minimal testing/usage of other SetRuntimeArgs API that TTNN uses for ops here, j
+    // just to see it go through the light-metal capture + replay flow.
+    if (rt_arg_per_core_vec) {
+        const std::vector<std::vector<uint32_t>> runtime_args_per_core = {runtime_args};
+        SetRuntimeArgs(program, dram_copy_kernel_id, {core}, runtime_args_per_core);
+    } else {
+        // Note - this interface doesn't take Buffer, just data.
+        SetRuntimeArgs(program, dram_copy_kernel_id, core, runtime_args);
+    }
 
     return program;
 }
@@ -182,14 +190,11 @@ TEST_F(LightMetalBasicTest, CreateBufferEnqueueWriteRead) {
     Finish(command_queue);
 }
 
-// Test simple case of single datamovement program on single RISC works for trace + replay.
-TEST_F(LightMetalBasicTest, SingleRISCDataMovement) {
-    CreateDeviceAndBeginCapture(4096);
-
+void SingleRISCDataMovement_test(tt::tt_metal::IDevice* device, bool rt_arg_per_core_vec) {
     uint32_t size_bytes = 64;  // 16 elements.
-    auto input = CreateBuffer(InterleavedBufferConfig{this->device_, size_bytes, size_bytes, BufferType::DRAM});
-    auto output = CreateBuffer(InterleavedBufferConfig{this->device_, size_bytes, size_bytes, BufferType::DRAM});
-    auto l1_buffer = CreateBuffer(InterleavedBufferConfig{this->device_, size_bytes, size_bytes, BufferType::L1});
+    auto input = CreateBuffer(InterleavedBufferConfig{device, size_bytes, size_bytes, BufferType::DRAM});
+    auto output = CreateBuffer(InterleavedBufferConfig{device, size_bytes, size_bytes, BufferType::DRAM});
+    auto l1_buffer = CreateBuffer(InterleavedBufferConfig{device, size_bytes, size_bytes, BufferType::L1});
     log_debug(
         tt::LogTest,
         "Created 3 Buffers. input: 0x{:x} output: 0x{:x} l1_buffer: 0x{:x}",
@@ -197,9 +202,9 @@ TEST_F(LightMetalBasicTest, SingleRISCDataMovement) {
         output->address(),
         l1_buffer->address());
 
-    CommandQueue& command_queue = this->device_->command_queue();
+    CommandQueue& command_queue = device->command_queue();
 
-    Program simple_program = create_simple_datamovement_program(*input, *output, *l1_buffer);
+    Program simple_program = create_simple_datamovement_program(*input, *output, *l1_buffer, rt_arg_per_core_vec);
     vector<uint32_t> input_data(input->size() / sizeof(uint32_t), 0);
     for (uint32_t i = 0; i < input_data.size(); i++) {
         input_data[i] = i;
@@ -222,6 +227,18 @@ TEST_F(LightMetalBasicTest, SingleRISCDataMovement) {
     }
 
     Finish(command_queue);
+}
+
+// Test simple case of single datamovement program on single RISC works for trace + replay.
+TEST_F(LightMetalBasicTest, SingleRISCDataMovement) {
+    CreateDeviceAndBeginCapture(4096);
+    SingleRISCDataMovement_test(this->device_, false);
+}
+
+// Same as above but with SetRuntimeArgs API that uses vec of CoreCoord and vec of vec rtargs.
+TEST_F(LightMetalBasicTest, SingleRISCDataMovementRtArgsPerCoreVec) {
+    CreateDeviceAndBeginCapture(4096);
+    SingleRISCDataMovement_test(this->device_, true);
 }
 
 // Test simple case of 3 riscs used for datamovement and compute works for trace + replay.
