@@ -28,7 +28,7 @@ set_target_properties(
 
 install(
     TARGETS
-        unit_tests_devices
+        unit_tests_device
         DESTINATION
         libexec/tt-metalium/validation
         COMPONENT
