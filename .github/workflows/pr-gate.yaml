@@ -95,7 +95,7 @@ jobs:
           reporter: jest-junit
 
       - name: Check for slow tests
-        shell: python3
+        shell: python3 {0}
         run: |
           import os
           import xml.etree.ElementTree as ET
