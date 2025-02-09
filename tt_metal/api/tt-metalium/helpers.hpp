@@ -16,4 +16,13 @@ inline uint32_t round_size(uint32_t sz, uint32_t alignment) {
     return ((sz + alignment - 1) / alignment * alignment);
 }
 
+constexpr auto operator""_MB(const unsigned long long v) -> uint32_t { return 1024 * 1024 * v; }
+
+constexpr auto operator""_GB(const unsigned long long v) -> uint32_t { return 1024 * 1024 * 1024 * v; }
+
+template <typename T>
+inline T align_addr(T addr, uint32_t alignment) {
+    return ((addr - 1) | (alignment - 1)) + 1;
+}
+
 }  // namespace tt::tt_metal

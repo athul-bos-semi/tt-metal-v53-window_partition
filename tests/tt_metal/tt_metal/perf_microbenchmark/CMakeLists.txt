@@ -34,6 +34,7 @@ set(PERF_MICROBENCH_TESTS_SRCS
     2_noc_rtor/test_noc_rtor.cpp
     3_pcie_transfer/test_rw_buffer.cpp
     3_pcie_transfer/test_pull_from_pcie.cpp
+    3_pcie_transfer/pcie_bench.cpp
     6_dram_offchip/test_dram_offchip.cpp
     7_kernel_launch/test_kernel_launch.cpp
     8_dram_adjacent_core_read/test_dram_read.cpp
@@ -68,7 +69,14 @@ foreach(arch ${ARCHITECTURES})
                 yaml-cpp::yaml-cpp
                 tt_fabric
         )
-        if(${TEST_SRC} STREQUAL "dispatch/test_pgm_dispatch.cpp")
+        if(
+            ${TEST_SRC}
+                STREQUAL
+                "dispatch/test_pgm_dispatch.cpp"
+            OR ${TEST_SRC}
+                STREQUAL
+                "3_pcie_transfer/pcie_bench.cpp"
+        )
             target_link_libraries(${TEST_TARGET} PRIVATE benchmark::benchmark)
         endif()
         target_include_directories(
