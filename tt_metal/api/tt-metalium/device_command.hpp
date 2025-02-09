@@ -172,6 +172,7 @@ public:
         uint32_t page_size,
         uint32_t pages,
         uint16_t length_adjust = 0) {
+        tt::log_info(tt::LogDispatch, "add_prefetch_relay_paged");
         uint32_t increment_sizeB = tt::align(sizeof(CQPrefetchCmd), this->pcie_alignment);
         auto initialize_relay_paged_cmd = [&](CQPrefetchCmd* relay_paged_cmd) {
             TT_ASSERT((length_adjust & CQ_PREFETCH_RELAY_PAGED_LENGTH_ADJUST_MASK) == length_adjust);

@@ -211,6 +211,8 @@ void populate_sharded_buffer_write_dispatch_cmds(
         dispatch_params.address,
         data_size_bytes);
 
+    tt::log_info(tt::LogDispatch, "populate_sharded_buffer_write_dispatch_cmds");
+
     if (dispatch_params.width_split) {
         TT_ASSERT(dispatch_params.buffer_page_mapping != nullptr);
         const auto& page_mapping = *(dispatch_params.buffer_page_mapping);
@@ -463,6 +465,7 @@ void write_sharded_buffer_to_core(
             BufferType::DRAM, buffer.device()->dram_channel_from_logical_core(core));
     }
 
+    tt::log_info(tt::LogDispatch, "write_sharded_buffer_to_core {}", core.str());
     while (num_pages != 0) {
         // data appended after CQ_PREFETCH_CMD_RELAY_INLINE + CQ_DISPATCH_CMD_WRITE_PAGED
         uint32_t data_offset_bytes = (sizeof(CQPrefetchCmd) + sizeof(CQDispatchCmd));
@@ -488,7 +491,7 @@ void write_sharded_buffer_to_core(
         dispatch_params.address = bank_base_address + curr_page_idx_in_shard * dispatch_params.page_size_to_write;
         dispatch_params.core = core;
 
-        tt::log_debug(tt::LogDispatch, "EnqueueWriteBuffer for channel {}", dispatch_params.cq_id);
+        tt::log_info(tt::LogDispatch, "EnqueueWriteBuffer for channel {}", dispatch_params.cq_id);
 
         issue_buffer_dispatch_command_sequence(src, buffer, dispatch_params, sub_device_ids, dispatch_core_type);
         curr_page_idx_in_shard += dispatch_params.pages_per_txn;
