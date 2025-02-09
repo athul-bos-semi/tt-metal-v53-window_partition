@@ -96,6 +96,8 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
                 impl/dispatch/kernels/cq_dispatch_slave.cpp
                 impl/dispatch/kernels/cq_dispatch.cpp
                 impl/dispatch/kernels/cq_prefetch.cpp
+                kernels/compute/blank.cpp
+                kernels/dataflow/blank.cpp
     )
 endif()
 
