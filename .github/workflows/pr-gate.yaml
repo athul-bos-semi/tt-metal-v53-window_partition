@@ -83,6 +83,7 @@ jobs:
         run: |
           # FIXME: Make a single executable to gather up all tests within this scope
           /usr/libexec/tt-metalium/validation/unit_tests_llk
+          /usr/libexec/tt-metalium/validation/unit_tests_devices
           /usr/libexec/tt-metalium/validation/unit_tests_stl
 
       - name: Test Report
