@@ -95,3 +95,27 @@ add_custom_target(
         unit_tests_noc
         unit_tests_lightmetal
 )
+
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
+    add_library(metalium_test_files INTERFACE)
+    # add_library(Metalium::Test::Files ALIAS metalium_test_files)
+    target_sources(
+        metalium_test_files
+        PUBLIC
+            FILE_SET jit_api
+            TYPE HEADERS
+            BASE_DIRS
+                ${CMAKE_PROJECT_SOURCE_DIR} # FIXME
+            FILES test_kernels/misc/ping_legal_l1s.cpp
+    )
+
+    install(
+        TARGETS
+            metalium_test_files
+        FILE_SET
+        jit_api
+            DESTINATION
+                ${CMAKE_INSTALL_LIBEXECDIR}/tt-metalium # FIXME: fix the include paths for jit_build
+            COMPONENT metalium-runtime
+    )
+endif()
