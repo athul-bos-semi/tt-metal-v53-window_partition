@@ -83,7 +83,7 @@ jobs:
         run: |
           # FIXME: Make a single executable to gather up all tests within this scope
           /usr/libexec/tt-metalium/validation/unit_tests_llk
-          # /usr/libexec/tt-metalium/validation/unit_tests_devices
+          # /usr/libexec/tt-metalium/validation/unit_tests_device
           /usr/libexec/tt-metalium/validation/unit_tests_stl
 
       - name: Test Report
@@ -95,32 +95,32 @@ jobs:
           reporter: jest-junit
 
       - name: Check for slow tests
+        shell: python3
         run: |
-          REPORTS=$(find /work/test-reports/ -name "*.xml")
-          if [[ -z "$REPORTS" ]]; then
-            echo "No test reports found."
-            exit 1
-          fi
-
-          python3 -c "
+          import os
           import xml.etree.ElementTree as ET
           import sys
 
-          report_files = '''$REPORTS'''.split()
+          # Find all XML files in the /work/test-reports directory
+          report_files = [os.path.join(root, file) for root, dirs, files in os.walk("/work/test-reports/") for file in files if file.endswith(".xml")]
+          if not report_files:
+              print("No test reports found.")
+              sys.exit(1)
+
           slow_tests = []
 
           for report_file in report_files:
               try:
                   tree = ET.parse(report_file)
                   root = tree.getroot()
-                  for tc in root.findall('.//testcase'):
-                      time = float(tc.get('time', 0))
+                  for tc in root.findall(".//testcase"):
+                      time = float(tc.get("time", 0))
                       if time > 0.1:
-                          slow_tests.append(f'{report_file}: {tc.get('classname', 'Unknown')}.{tc.get('name', 'Unknown')} ({time:.3f}s)')
+                          slow_tests.append(f"{report_file}: {tc.get('classname', 'Unknown')}.{tc.get('name', 'Unknown')} ({time:.3f}s)")
               except Exception as e:
-                  print(f'Error parsing {report_file}: {e}')
+                  print(f"Error parsing {report_file}: {e}")
+                  sys.exit(2)
 
           if slow_tests:
-              print('Some tests exceeded 100ms:\\n' + '\\n'.join(slow_tests))
-              sys.exit(1)
-          "
+              print("Some tests exceeded 100ms:\n" + "\n".join(slow_tests))
+              sys.exit(3)
