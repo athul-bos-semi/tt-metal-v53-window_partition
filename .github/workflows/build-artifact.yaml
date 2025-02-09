@@ -196,11 +196,12 @@ jobs:
 
       - name: 🛠️ Compile
         env:
-          CCACHE_LOGFILE: ccache.log
+          CCACHE_LOGFILE: /work/ccache.log
         run: |
           # --target install is for the tarball that should get replaced by proper packaging later
           nice -19 cmake --build build --target install
-          grep 'miss' ccache.log
+          ls -al /work
+          grep 'miss' /work/ccache.log
 
       - name: 📦 Package
         run: |
