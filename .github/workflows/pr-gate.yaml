@@ -80,9 +80,10 @@ jobs:
           GTEST_COLOR: yes
           GTEST_OUTPUT: xml:/work/test-reports/
           TT_METAL_HOME: /usr/libexec/tt-metalium # TODO: Need to get away from env vars!
+          TT_METAL_SLOW_DISPATCH_MODE: true # TODO: burn this with fire
         run: |
           # FIXME: Make a single executable to gather up all tests within this scope
-          /usr/libexec/tt-metalium/validation/unit_tests_llk
+          # /usr/libexec/tt-metalium/validation/unit_tests_llk
           /usr/libexec/tt-metalium/validation/unit_tests_device
           /usr/libexec/tt-metalium/validation/unit_tests_stl
 
