@@ -600,7 +600,6 @@ FORCE_INLINE void receiver_send_completion_ack(
 
 template <uint8_t SENDER_NUM_BUFFERS>
 FORCE_INLINE bool can_forward_packet_completely(
-    const volatile tt::fabric::PacketHeader* packet_header,
     tt::fabric::RoutingFields cached_routing_fields,
     tt::fabric::EdmToEdmSender<SENDER_NUM_BUFFERS>& downstream_edm_interface) {
     // We always check if it is the terminal mcast packet value. We can do this because all unicast packets have the
@@ -614,17 +613,26 @@ template <uint8_t SENDER_NUM_BUFFERS>
 FORCE_INLINE void receiver_forward_packet(
     // TODO: have a separate cached copy of the packet header to save some additional L1 loads
     volatile tt::fabric::PacketHeader *packet_start,
+    tt::fabric::CachedPacketHeader const& cached_packet_header,
     tt::fabric::RoutingFields cached_routing_fields,
     tt::fabric::EdmToEdmSender<SENDER_NUM_BUFFERS> &downstream_edm_interface,
     uint8_t transaction_id) {
 
+    auto const& noc_command_fields = tt::fabric::PacketHeader::get_noc_command_fields_from_cached(cached_packet_header);
+    tt::fabric::NocSendType const noc_send_type = tt::fabric::PacketHeader::get_noc_send_type_from_cached(cached_packet_header);
+    auto payload_size_bytes = tt::fabric::PacketHeader::get_payload_size_from_cached(cached_packet_header);
     bool start_distance_is_terminal_value = (cached_routing_fields.value & tt::fabric::RoutingFields::HOP_DISTANCE_MASK) == tt::fabric::RoutingFields::LAST_HOP_DISTANCE_VAL;
     if (start_distance_is_terminal_value) {
-        execute_chip_unicast_to_local_chip(packet_start, transaction_id);
+        execute_chip_unicast_to_local_chip(
+            (size_t)packet_start,
+            payload_size_bytes,
+            noc_send_type,
+            noc_command_fields,
+            transaction_id);
     }
     bool not_last_destination_device = cached_routing_fields.value != tt::fabric::RoutingFields::LAST_MCAST_VAL;
     if (not_last_destination_device) {
-        forward_payload_to_downstream_edm(packet_start, cached_routing_fields, downstream_edm_interface, transaction_id);
+        forward_payload_to_downstream_edm(packet_start, payload_size_bytes, cached_packet_header, downstream_edm_interface, transaction_id);
     }
 }
 
@@ -776,16 +784,17 @@ FORCE_INLINE void run_receiver_channel_step(
     if (unwritten_packets) {
         auto receiver_buffer_index = wr_sent_ptr.get_buffer_index();
         volatile auto packet_header = local_receiver_channel.get_packet_header(receiver_buffer_index);
+        auto const cached_packet_header = packet_header->cache_as_raw_uint32();
+        auto const cached_routing_fields = tt::fabric::PacketHeader::get_routing_fields_from_cached(cached_packet_header);
 
-        tt::fabric::RoutingFields cached_routing_fields = const_cast<tt::fabric::PacketHeader*>(packet_header)->routing_fields;
         print_pkt_header(packet_header);
         bool can_send_to_all_local_chip_receivers =
-            can_forward_packet_completely(packet_header, cached_routing_fields, downstream_edm_interface);
+            can_forward_packet_completely(cached_routing_fields, downstream_edm_interface);
         bool trid_flushed = receiver_channel_trid_tracker.transaction_flushed(receiver_buffer_index);
         if (can_send_to_all_local_chip_receivers && trid_flushed) {
             // DeviceZoneScopedN("EDMR-Send-Impl");
             uint8_t trid = receiver_channel_trid_tracker.update_buffer_slot_to_next_trid_and_advance_trid_counter(receiver_buffer_index);
-            receiver_forward_packet(packet_header, cached_routing_fields, downstream_edm_interface, trid);
+            receiver_forward_packet(packet_header, cached_packet_header, cached_routing_fields, downstream_edm_interface, trid);
             wr_sent_ptr.increment();
         }
     }

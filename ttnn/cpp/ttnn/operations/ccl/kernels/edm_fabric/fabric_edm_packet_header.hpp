@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <array>
 
 namespace tt::fabric {
 
@@ -101,6 +102,8 @@ union NocCommandFields{
 } ;
 static_assert(sizeof(NocCommandFields) <= 16, "CommandFields size is not 16 bytes");
 
+using CachedPacketHeader = std::array<uint32_t, 3>;
+
 // TODO: wrap this in a debug version that holds type info so we can assert for field/command/
 struct PacketHeader {
     // TODO: trim this down noc_send_type 2 bits (4 values):
@@ -117,6 +120,8 @@ struct PacketHeader {
 
     RoutingFields routing_fields;
     uint16_t payload_size_bytes; // excludes header size
+    uint32_t padding00;
+
     NocCommandFields command_fields; // size = 16B due to uint64_t alignment
 
     // Sort of hack to work-around DRAM read alignment issues that must be 32B aligned
@@ -129,6 +134,34 @@ struct PacketHeader {
     // manage this complexity.
     uint32_t padding0;
     uint32_t padding1;
+
+    inline CachedPacketHeader cache_as_raw_uint32() volatile const{
+        auto as_uint32_ptr = reinterpret_cast<volatile uint32_t const*>(this);
+        return {as_uint32_ptr[0], 0, as_uint32_ptr[2]};
+    }
+
+    inline static uint16_t get_payload_size_from_cached(CachedPacketHeader const& cached_uint32_ptr) {
+        static_assert(offsetof(PacketHeader, payload_size_bytes) == 2);
+        return (cached_uint32_ptr[0] >> 16) & 0xFFFF;
+    }
+
+    inline static NocSendType get_noc_send_type_from_cached(CachedPacketHeader const& cached_uint32_ptr) {
+        return NocSendType(cached_uint32_ptr[0] & 0x7);
+    }
+
+    inline static NocCommandFields get_noc_command_fields_from_cached(CachedPacketHeader const& cached_uint32_ptr) {
+        static_assert(offsetof(PacketHeader, command_fields) == 8);
+        constexpr uint32_t noc_fields_bits_mask = sizeof(NocCommandFields) * 8 - 1;
+        uint16_t noc_fields_bits = cached_uint32_ptr[2] & noc_fields_bits_mask;
+        return *reinterpret_cast<NocCommandFields*>(&noc_fields_bits);
+    }
+    inline static RoutingFields get_routing_fields_from_cached(CachedPacketHeader const& cached_uint32_ptr) {
+        static_assert(offsetof(PacketHeader, routing_fields) == 1);
+        constexpr uint32_t routing_fields_bits_mask = sizeof(RoutingFields) * 8 - 1;
+        constexpr uint32_t routing_fields_bits_shift = (offsetof(PacketHeader, routing_fields) * 8);
+        uint8_t routing_fields_bits = (cached_uint32_ptr[0] >> routing_fields_bits_shift) & routing_fields_bits_mask;
+        return *reinterpret_cast<RoutingFields*>(&routing_fields_bits);
+    }
 
     inline void set_chip_send_type(ChipSendType &type) { this->chip_send_type = type; }
     inline void set_noc_send_type(NocSendType &type) { this->noc_send_type = type; }
