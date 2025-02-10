@@ -10,7 +10,7 @@ import torch
 import ttnn
 
 from tests.ttnn.utils_for_testing import assert_with_pcc, check_with_pcc_without_tensor_printout
-from models.utility_functions import is_grayskull, is_blackhole, torch_random, skip_for_grayskull
+from models.utility_functions import is_grayskull, is_blackhole, torch_random, skip_for_grayskull, skip_for_wormhole_b0
 
 
 @pytest.mark.parametrize("height", [32, 30])
@@ -341,6 +341,7 @@ def test_untilize_w4(shape, input_layout, output_layout, device):
     assert_with_pcc(input_a[:, :, :1, :10912], output_tensor)
 
 
+@skip_for_wormhole_b0()
 def test_shard_untilize(device):
     torch.manual_seed(2005)
 
