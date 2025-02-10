@@ -357,6 +357,17 @@ void Device::initialize_device_kernel_defines()
     } else {
         this->device_kernel_defines_.emplace("IS_NOT_POW2_NUM_L1_BANKS", "1");
     }
+
+    // TODO (abhullar): Until we switch to virtual coordinates, we need to pass physical PCIe coordinates to device
+    //  because Blackhole PCIe endpoint is dependent on board type
+    const metal_SocDescriptor& soc_d = tt::Cluster::instance().get_soc_desc(this->id());
+    auto pcie_cores = soc_d.get_pcie_cores();
+    auto grid_size = this->grid_size();
+
+    CoreCoord pcie_core = pcie_cores.empty() ? grid_size : pcie_cores[0];
+
+    this->device_kernel_defines_.emplace("PCIE_NOC_X", "19");
+    this->device_kernel_defines_.emplace("PCIE_NOC_Y", "24");
 }
 
 void Device::initialize_build() {
@@ -722,9 +733,18 @@ void Device::initialize_and_launch_firmware() {
 
     int non_worker_cores_idx = 0;
     for (const CoreCoord &core : pcie_cores) {
+        std::cout << "pcie core is " << core.str() << " virtual is "
+                  << tt::Cluster::instance().get_virtual_coordinate_from_physical_coordinates(this->id(), core).str()
+                  << std::endl;
+        tt::umd::CoreCoord translated_coord =
+            soc_d.translate_coord_to(core, CoordSystem::PHYSICAL, CoordSystem::VIRTUAL);
+        std::cout << "\tupdated to " << translated_coord.str() << std::endl;
         core_info->non_worker_cores[non_worker_cores_idx++] = {core.x, core.y, AddressableCoreType::PCIE};
     }
     for (const CoreCoord &core : unique_dram_cores) {
+        std::cout << "dram core is " << core.str() << " virtual is "
+                  << tt::Cluster::instance().get_virtual_coordinate_from_physical_coordinates(this->id(), core).str()
+                  << std::endl;
         core_info->non_worker_cores[non_worker_cores_idx++] = {core.x, core.y, AddressableCoreType::DRAM};
     }
     for (const CoreCoord &core : eth_cores) {
@@ -732,6 +752,7 @@ void Device::initialize_and_launch_firmware() {
     }
     if (hal.is_coordinate_virtualization_enabled()) {
         // Track Virtual Non Worker Cores (In this case only Eth) separately
+        // todo this needs to include pcie and dram for bh!
         uint32_t virtual_non_worker_cores_idx = 0;
         for (const CoreCoord &core : eth_cores) {
             auto virtual_core = this->virtual_core_from_physical_core(core);
@@ -1001,6 +1022,7 @@ void Device::init_command_queue_device() {
             sub_device_manager_tracker_->get_active_sub_device_manager()->num_sub_devices(),
             sub_device_manager_tracker_->get_active_sub_device_manager()->noc_mcast_unicast_data());
     }
+    std::cout << "done init cq device" << std::endl;
 }
 
 bool Device::initialize(const uint8_t num_hw_cqs, size_t l1_small_size, size_t trace_region_size, tt::stl::Span<const std::uint32_t> l1_bank_remap, bool minimal) {
@@ -1068,6 +1090,8 @@ bool Device::close() {
         }
         hw_command_queue->terminate();
     }
+
+    std::cout << "terminated the cqs!" << std::endl;
 
     this->work_executor_.reset();
     tt_metal::detail::DumpDeviceProfileResults(this, ProfilerDumpState::LAST_CLOSE_DEVICE);
@@ -1183,6 +1207,8 @@ CoreType Device::core_type_from_virtual_core(const CoreCoord &virtual_coord) con
 }
 
 CoreCoord Device::virtual_noc0_coordinate(uint8_t noc_index, CoreCoord coord) const {
+    // what happens if virtual and physical overlap ...
+    return coord;
     if (coord.x >= this->grid_size().x || coord.y >= this->grid_size().y) {
         // Coordinate already in virtual space: NOC0 and NOC1 are the same
         return coord;
@@ -1200,7 +1226,9 @@ CoreCoord Device::virtual_noc0_coordinate(uint8_t noc_index, CoreCoord coord) co
 }
 
 CoreCoord Device::virtual_noc_coordinate(uint8_t noc_index, CoreCoord coord) const {
-     if (coord.x >= this->grid_size().x || coord.y >= this->grid_size().y) {
+    // what happens if virtual and physical overlap
+    return coord;
+    if (coord.x >= this->grid_size().x || coord.y >= this->grid_size().y) {
         // Coordinate already in virtual space: NOC0 and NOC1 are the same
         return coord;
     } else {
@@ -1737,6 +1765,7 @@ std::vector<std::pair<transfer_info_cores, uint32_t>> Device::extract_dst_noc_mu
     for (const CoreRange& core_range : ranges) {
         CoreCoord virtual_start = this->virtual_core_from_logical_core(core_range.start_coord, core_type);
         CoreCoord virtual_end = this->virtual_core_from_logical_core(core_range.end_coord, core_type);
+        std::cout << "virtual st " << virtual_start.str() << " , virtual end " << virtual_end.str() << std::endl;
 
         uint32_t num_receivers = core_range.size();
         dst_noc_multicast_info.push_back(std::make_pair(CoreRange(virtual_start, virtual_end), num_receivers));
