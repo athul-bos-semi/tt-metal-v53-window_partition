@@ -31,7 +31,7 @@ from models.demos.llama3.tt.model_config import TtModelArgs
 
 from models.perf.benchmarking_utils import BenchmarkProfiler
 from models.demos.utils.llm_demo_utils import create_benchmark_data, verify_perf
-from models.demos.llama3.tt.model_config import LlamaOptimizations
+from models.demos.llama3.tt.model_config import LlamaOptimizations, LayerGroup, PrecisionSetting
 
 
 def load_and_cache_context(context_url, cache_dir, max_length=None):
@@ -918,6 +918,9 @@ def run_llama3_demo(
     [
         LlamaOptimizations.performance,
         LlamaOptimizations.accuracy,
+        LlamaOptimizations(
+            {LayerGroup.FF1_FF3: PrecisionSetting.BFP4_LOFI, LayerGroup.FF2: PrecisionSetting.BFP8_HIFI2}
+        ),
     ],
 )
 @pytest.mark.parametrize("device_params", [{"trace_region_size": 23887872, "num_command_queues": 2}], indirect=True)
