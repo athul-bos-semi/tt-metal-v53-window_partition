@@ -26,7 +26,7 @@ namespace {
 
 // Single RISC, no CB's here. Very simple.
 Program create_simple_datamovement_program(
-    Buffer& input, Buffer& output, Buffer& l1_buffer, bool rt_arg_per_core_vec = false) {
+    const Buffer& input, const Buffer& output, const Buffer& l1_buffer, bool rt_arg_per_core_vec = false) {
     Program program = CreateProgram();
     IDevice* device = input.device();
     constexpr CoreCoord core = {0, 0};
@@ -133,7 +133,7 @@ using LightMetalBasicTest = SingleDeviceLightMetalFixture;
 TEST_F(LightMetalBasicTest, CreateBufferEnqueueWriteRead) {
     CreateDeviceAndBeginCapture(4096);
 
-    CommandQueue& command_queue = this->device_->command_queue();
+    CommandQueue& command_queue = device_->command_queue();
     uint32_t num_loops = 5;
     bool keep_buffers_alive = true;
     std::vector<std::shared_ptr<Buffer>> buffers_vec;
@@ -143,7 +143,7 @@ TEST_F(LightMetalBasicTest, CreateBufferEnqueueWriteRead) {
 
         // Switch to use top level CreateBuffer API that has trace support.
         uint32_t size_bytes = 64;  // 16 elements.
-        auto buffer = CreateBuffer(InterleavedBufferConfig{this->device_, size_bytes, size_bytes, BufferType::DRAM});
+        auto buffer = CreateBuffer(InterleavedBufferConfig{device_, size_bytes, size_bytes, BufferType::DRAM});
         log_debug(
             tt::LogTest,
             "created buffer loop: {} with size: {} bytes addr: 0x{:x}",
@@ -232,13 +232,13 @@ void SingleRISCDataMovement_test(tt::tt_metal::IDevice* device, bool rt_arg_per_
 // Test simple case of single datamovement program on single RISC works for trace + replay.
 TEST_F(LightMetalBasicTest, SingleRISCDataMovement) {
     CreateDeviceAndBeginCapture(4096);
-    SingleRISCDataMovement_test(this->device_, false);
+    SingleRISCDataMovement_test(device_, false);
 }
 
 // Same as above but with SetRuntimeArgs API that uses vec of CoreCoord and vec of vec rtargs.
 TEST_F(LightMetalBasicTest, SingleRISCDataMovementRtArgsPerCoreVec) {
     CreateDeviceAndBeginCapture(4096);
-    SingleRISCDataMovement_test(this->device_, true);
+    SingleRISCDataMovement_test(device_, true);
 }
 
 // Test simple case of 3 riscs used for datamovement and compute works for trace + replay.
@@ -246,10 +246,10 @@ TEST_F(LightMetalBasicTest, ThreeRISCDataMovementCompute) {
     CreateDeviceAndBeginCapture(4096);
 
     uint32_t size_bytes = 64;  // 16 elements.
-    auto input = CreateBuffer(InterleavedBufferConfig{this->device_, size_bytes, size_bytes, BufferType::DRAM});
-    auto output = CreateBuffer(InterleavedBufferConfig{this->device_, size_bytes, size_bytes, BufferType::DRAM});
+    auto input = CreateBuffer(InterleavedBufferConfig{device_, size_bytes, size_bytes, BufferType::DRAM});
+    auto output = CreateBuffer(InterleavedBufferConfig{device_, size_bytes, size_bytes, BufferType::DRAM});
 
-    CommandQueue& command_queue = this->device_->command_queue();
+    CommandQueue& command_queue = device_->command_queue();
 
     // TODO (kmabee) - There is issue with using make_shared, revisit this.
     // auto simple_program = std::make_shared<Program>(create_simple_unary_program(*input,
@@ -276,10 +276,9 @@ TEST_F(LightMetalBasicTest, ThreeRISCDataMovementComputeDynamicCB) {
 
     uint32_t buf_size_bytes = 64;  // 16 elements.
     uint32_t cb_size_bytes = 2048;
-    auto input = CreateBuffer(InterleavedBufferConfig{this->device_, buf_size_bytes, buf_size_bytes, BufferType::DRAM});
-    auto output =
-        CreateBuffer(InterleavedBufferConfig{this->device_, buf_size_bytes, buf_size_bytes, BufferType::DRAM});
-    auto cb_in_buf = CreateBuffer(InterleavedBufferConfig{this->device_, cb_size_bytes, cb_size_bytes, BufferType::L1});
+    auto input = CreateBuffer(InterleavedBufferConfig{device_, buf_size_bytes, buf_size_bytes, BufferType::DRAM});
+    auto output = CreateBuffer(InterleavedBufferConfig{device_, buf_size_bytes, buf_size_bytes, BufferType::DRAM});
+    auto cb_in_buf = CreateBuffer(InterleavedBufferConfig{device_, cb_size_bytes, cb_size_bytes, BufferType::L1});
     log_info(
         tt::LogTest,
         "Created 3 Buffers. 0x{:x} 0x{:x} 0x{:x}",
@@ -287,7 +286,7 @@ TEST_F(LightMetalBasicTest, ThreeRISCDataMovementComputeDynamicCB) {
         output->address(),
         cb_in_buf->address());
 
-    CommandQueue& command_queue = this->device_->command_queue();
+    CommandQueue& command_queue = device_->command_queue();
     auto simple_program = create_simple_unary_program(*input, *output, cb_in_buf.get());
 
     vector<uint32_t> input_data(input->size() / sizeof(uint32_t), 0);
@@ -309,10 +308,10 @@ TEST_F(LightMetalBasicTest, SingleProgramTraceCapture) {
     CreateDeviceAndBeginCapture(4096);
 
     uint32_t size_bytes = 64;  // 16 elements. Was 2048 in original test.
-    auto input = CreateBuffer(InterleavedBufferConfig{this->device_, size_bytes, size_bytes, BufferType::DRAM});
-    auto output = CreateBuffer(InterleavedBufferConfig{this->device_, size_bytes, size_bytes, BufferType::DRAM});
+    auto input = CreateBuffer(InterleavedBufferConfig{device_, size_bytes, size_bytes, BufferType::DRAM});
+    auto output = CreateBuffer(InterleavedBufferConfig{device_, size_bytes, size_bytes, BufferType::DRAM});
 
-    CommandQueue& command_queue = this->device_->command_queue();
+    CommandQueue& command_queue = device_->command_queue();
     Program simple_program = create_simple_unary_program(*input, *output);
 
     // Setup input data for program with some simple values.
@@ -333,16 +332,16 @@ TEST_F(LightMetalBasicTest, SingleProgramTraceCapture) {
     write_junk_to_buffer(command_queue, *output);
 
     // Now enable Metal Trace and run program again for capture.
-    uint32_t tid = BeginTraceCapture(this->device_, command_queue.id());
+    uint32_t tid = BeginTraceCapture(device_, command_queue.id());
     EnqueueProgram(command_queue, simple_program, false);
-    EndTraceCapture(this->device_, command_queue.id(), tid);
+    EndTraceCapture(device_, command_queue.id(), tid);
 
     // Verify trace output during replay matches expected output from original capture.
     LightMetalCompareToGolden(command_queue, *output, eager_output_data.data());
 
     // Done
     Finish(command_queue);
-    ReleaseTrace(this->device_, tid);
+    ReleaseTrace(device_, tid);
 }
 
 // Test simple compute test with metal trace, but no explicit trace replay (added automatically by light metal trace).
@@ -350,11 +349,11 @@ TEST_F(LightMetalBasicTest, TwoProgramTraceCapture) {
     CreateDeviceAndBeginCapture(4096);
 
     uint32_t size_bytes = 64;  // 16 elements. Was 2048 in original test.
-    auto input = CreateBuffer(InterleavedBufferConfig{this->device_, size_bytes, size_bytes, BufferType::DRAM});
-    auto interm = CreateBuffer(InterleavedBufferConfig{this->device_, size_bytes, size_bytes, BufferType::DRAM});
-    auto output = CreateBuffer(InterleavedBufferConfig{this->device_, size_bytes, size_bytes, BufferType::DRAM});
+    auto input = CreateBuffer(InterleavedBufferConfig{device_, size_bytes, size_bytes, BufferType::DRAM});
+    auto interm = CreateBuffer(InterleavedBufferConfig{device_, size_bytes, size_bytes, BufferType::DRAM});
+    auto output = CreateBuffer(InterleavedBufferConfig{device_, size_bytes, size_bytes, BufferType::DRAM});
 
-    CommandQueue& command_queue = this->device_->command_queue();
+    CommandQueue& command_queue = device_->command_queue();
 
     Program op0 = create_simple_unary_program(*input, *interm);
     Program op1 = create_simple_unary_program(*interm, *output);
@@ -379,17 +378,17 @@ TEST_F(LightMetalBasicTest, TwoProgramTraceCapture) {
     write_junk_to_buffer(command_queue, *output);
 
     // Now enable Metal Trace and run program again for capture.
-    uint32_t tid = BeginTraceCapture(this->device_, command_queue.id());
+    uint32_t tid = BeginTraceCapture(device_, command_queue.id());
     EnqueueProgram(command_queue, op0, false);
     EnqueueProgram(command_queue, op1, false);
-    EndTraceCapture(this->device_, command_queue.id(), tid);
+    EndTraceCapture(device_, command_queue.id(), tid);
 
     // Verify trace output during replay matches expected output from original capture.
     LightMetalCompareToGolden(command_queue, *output, eager_output_data.data());
 
     // Done
     Finish(command_queue);
-    ReleaseTrace(this->device_, tid);
+    ReleaseTrace(device_, tid);
 }
 
 }  // namespace
