@@ -46,6 +46,8 @@
 #include "ttnn/operations/transformer/transformer_pybind.hpp"
 #include "ttnn/operations/uniform/uniform_pybind.hpp"
 
+#include "ttnn/operations/swin_ops/swin_ops_pybind.hpp"
+
 namespace py = pybind11;
 
 namespace ttnn {
