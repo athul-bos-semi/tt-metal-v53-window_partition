@@ -60,6 +60,9 @@ void py_module(py::module& module) {
     auto m_examples = module.def_submodule("examples", "examples of operations");
     examples::py_module(m_examples);
 
+    auto m_swin_ops = module.def_submodule("swin_ops", "swin_ops operations");
+    swin_ops::py_module(m_swin_ops);
+
     //  Eltwise operations: unary, binary, ternary, backward, complex
     auto m_unary = module.def_submodule("unary", "unary operations");
     unary::py_module(m_unary);

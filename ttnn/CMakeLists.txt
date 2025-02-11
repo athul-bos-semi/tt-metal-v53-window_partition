@@ -1,4 +1,22 @@
 set(ALL_TTNN_SRCS
+     ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/operations/swin_ops/swin_ops_pybind.hpp
+
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/operations/swin_ops/concat/concat_pybind.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/operations/swin_ops/concat/concat.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/operations/swin_ops/concat/concat.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/operations/swin_ops/concat/device/concat_device_operation.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/operations/swin_ops/concat/device/concat_device_operation.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/operations/swin_ops/concat/device/multi_core_program_factory.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/operations/swin_ops/concat/device/multi_core_program_factory.cpp
+
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/operations/swin_ops/window_partition/windowpart_pybind.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/operations/swin_ops/window_partition/windowpart.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/operations/swin_ops/window_partition/windowpart.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/operations/swin_ops/window_partition/device/window_partition_device_operation.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/operations/swin_ops/window_partition/device/window_partition_device_operation.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/operations/swin_ops/window_partition/device/multi_core_program_factory.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/operations/swin_ops/window_partition/device/multi_core_program_factory.cpp
+
     ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/async_runtime.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/config.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cpp/ttnn/core.cpp
