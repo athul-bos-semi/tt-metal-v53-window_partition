@@ -69,7 +69,7 @@ std::vector<ttnn::SimpleShape> WindowPartDeviceOperation::compute_output_shapes(
     return {shape_out};
 }
 
-std::vector<Tensor> WindowPartDeviceOperation::create_output_tensors(const std::vector<Tensor> &input_tensors) const {
+std::vector<Tensor> WindowPartDeviceOperation::create_output_tensors(const std::vector<Tensor> &input_tensors, const std::vector<std::optional<Tensor>>& output_tensors) const {
     const Tensor &ref_in_tensor = input_tensors.at(0);
 
     if (this->output_mem_config.is_sharded()) {
